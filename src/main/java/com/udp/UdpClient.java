@@ -39,7 +39,7 @@ public class UdpClient {
 
     public static void main(String[] args) {
         UdpClient client = new UdpClient("localhost", 8080);
-        String orderMessage = "BUY;AAPL;10;150";
+        String orderMessage = "ORDER:BUY;AAPL;10;150";
         client.sendMessage(orderMessage);
     }
 }

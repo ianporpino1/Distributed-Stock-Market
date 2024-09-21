@@ -79,9 +79,15 @@ public class UdpGateway {
     }
 
     private static boolean isValidRequest(String data) {
-        String[] parts = data.split(";");
-        return parts.length == 4 && ("BUY".equals(parts[0]) || "SELL".equals(parts[0]))
-                && isNumeric(parts[2]) && isNumeric(parts[3]);
+        String[] parts = data.split(":", 2);
+        if (parts.length != 2 || !parts[0].trim().equals("ORDER")) {
+            return false;
+        }
+        String[] orderDetails = parts[1].trim().split(";");
+
+        return orderDetails.length == 4 &&
+                ("BUY".equals(orderDetails[0]) || "SELL".equals(orderDetails[0])) &&
+                isNumeric(orderDetails[2]) && isNumeric(orderDetails[3]);
     }
 
     private static boolean isNumeric(String str) {

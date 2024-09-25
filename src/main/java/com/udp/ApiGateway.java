@@ -1,17 +1,25 @@
 package com.udp;
 
+import com.strategy.CommunicationStrategy;
+
 import java.io.IOException;
 import java.net.*;
 
-public class UdpGateway {
+public class ApiGateway {
 
-    private static final String[] INSTANCES_IP = {"127.0.0.1", "127.0.0.1"};
-    private static final int[] INSTANCES_PORT = {9001, 9002};
+    private static final String[] INSTANCES_IP = {"127.0.0.1", "127.0.0.1", "127.0.0.1"};
+    private static final int[] INSTANCES_PORT = {9001, 9002, 9003};
     private static final int GATEWAY_PORT = 8080;
     private static final int TIMEOUT = 2000;
+    
+    private final CommunicationStrategy strategy;
 
 
     private static int currentInstanceIndex = 0;
+
+    public ApiGateway(CommunicationStrategy strategy) {
+        this.strategy = strategy;
+    }
 
     public static void main(String[] args) {
         try (DatagramSocket gatewaySocket = new DatagramSocket(GATEWAY_PORT)) {

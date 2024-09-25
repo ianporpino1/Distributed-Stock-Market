@@ -2,18 +2,20 @@ package com.patterns;
 
 import java.io.Serializable;
 
-public class UdpMessage implements Serializable {
+public class Message implements Serializable {
     
-
     private MessageType type;
-    private int generation;          
-    private int candidateId; 
+    private int generation;
+    private int senderId; 
     private int leaderId;
-
-    public UdpMessage(MessageType type, int generation, int candidateId, int leaderId) {
+    
+    public Message(MessageType type){
+        this.type = type;
+    }
+    public Message(MessageType type, int generation, int senderId, int leaderId) {
         this.type = type;
         this.generation = generation;
-        this.candidateId = candidateId;
+        this.senderId = senderId;
         this.leaderId = leaderId;
     }
 
@@ -29,33 +31,20 @@ public class UdpMessage implements Serializable {
         return generation;
     }
 
-    public void setGeneration(int generation) {
-        this.generation = generation;
-    }
-
-    public int getCandidateId() {
-        return candidateId;
-    }
-
-    public void setCandidateId(int candidateId) {
-        this.candidateId = candidateId;
+    public int getSenderId() {
+        return senderId;
     }
 
     public int getLeaderId() {
         return leaderId;
     }
-
-    public void setLeaderId(int leaderId) {
-        this.leaderId = leaderId;
-    }
     
-
     @Override
     public String toString() {
-        return "UdpMessage{" +
+        return "Message{" +
                 "type=" + type +
                 ", generation=" + generation +
-                ", candidateId=" + candidateId +
+                ", candidateId=" + senderId +
                 ", leaderId=" + leaderId +
                 '}';
     }

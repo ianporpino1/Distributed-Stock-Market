@@ -2,9 +2,9 @@ package com.udp;
 
 import com.model.Order;
 import com.model.OrderType;
+import com.patterns.Message;
 import com.patterns.MessageType;
 import com.patterns.ServerRole;
-import com.patterns.UdpMessage;
 import com.service.MatchingEngine;
 import com.service.OrderBookService;
 
@@ -21,8 +21,6 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class UdpMatchingEngineServer {
     private final MatchingEngine matchingEngine;
-    
-    
     private int serverId;
     private final AtomicInteger currentGeneration = new AtomicInteger(0);
     private volatile ServerRole serverRole;
@@ -31,20 +29,14 @@ public class UdpMatchingEngineServer {
     private int leaderId;
     private Set<Integer> clusterNodes;
     private Map<Integer, InetSocketAddress> nodeAddresses;
-
     private final ReentrantLock roleLock = new ReentrantLock();
-
     private volatile boolean electionInProgress = true;
-    
     private ScheduledExecutorService heartbeatChecker = Executors.newScheduledThreadPool(1);
     private Map<Integer, Long> lastHeartbeatReceivedTimes = new ConcurrentHashMap<>();
     private long timeoutThreshold = 4000;
-
     private int electionTimeout = 5000;
     private int heartbeatInterval = 2000;
-
     private static final int PORT = 9001;
-
     private DatagramSocket socket;
 
     public UdpMatchingEngineServer(MatchingEngine matchingEngine, int serverId, Map<Integer, InetSocketAddress> nodeAddresses) throws SocketException {
@@ -82,8 +74,7 @@ public class UdpMatchingEngineServer {
             roleLock.unlock();
         }
     }
-
-
+    
     private void checkHeartbeatTimeouts() {
         long now = System.currentTimeMillis();
         for (Map.Entry<Integer, Long> entry : lastHeartbeatReceivedTimes.entrySet()) {
@@ -91,6 +82,7 @@ public class UdpMatchingEngineServer {
             System.out.println("Tempo desde o último heartbeat do servidor " + entry.getKey() + ": " + timeSinceLastHeartbeat);
             if (timeSinceLastHeartbeat >= timeoutThreshold) {
                 System.out.println("Servidor " + entry.getKey() + " considerado falho.");
+                
                 if(leaderId == entry.getKey())  startElection();
             }
         }
@@ -111,7 +103,7 @@ public class UdpMatchingEngineServer {
                 }
                 else{
                     ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(packet.getData(), 0, packet.getLength()));
-                    UdpMessage message = (UdpMessage) in.readObject();
+                    Message message = (Message) in.readObject();
                     System.out.println("Mensagem recebida: " + message.toString());
                     handleMessage(message);
                 }
@@ -150,7 +142,7 @@ public class UdpMatchingEngineServer {
     }
 
 
-    private void handleMessage(UdpMessage message) {
+    private void handleMessage(Message message) {
         switch (message.getType()) {
             case REQUEST_VOTE:
                 handleRequestVote(message);
@@ -166,18 +158,18 @@ public class UdpMatchingEngineServer {
         }
     }
 
-    private void handleRequestVote(UdpMessage message) {
+    private void handleRequestVote(Message message) {
         if (message.getGeneration() >= getCurrentGeneration()) {
             currentGeneration.set(message.getGeneration());
-            if (votedFor.get() == -1 || votedFor.get() == message.getCandidateId()) {
-                votedFor.set(message.getCandidateId());
-                UdpMessage vote = new UdpMessage(MessageType.VOTE, getCurrentGeneration(), serverId, -1);
-                sendMessage(vote, nodeAddresses.get(message.getCandidateId()));
+            if (votedFor.get() == -1 || votedFor.get() == message.getSenderId()) { //TALVEZ ERRO. GETCANDIDATEID()
+                votedFor.set(message.getSenderId());
+                Message vote = new Message(MessageType.VOTE, getCurrentGeneration(), serverId, -1);
+                sendMessage(vote, nodeAddresses.get(message.getSenderId()));
             }
         }
     }
 
-    private void handleHeartbeat(UdpMessage message) {
+    private void handleHeartbeat(Message message) {
         if (message.getGeneration() >= getCurrentGeneration()) {
             roleLock.lock();
             try {
@@ -215,7 +207,7 @@ public class UdpMatchingEngineServer {
 
         for (int otherNodeId : nodeAddresses.keySet()) {
             if (otherNodeId != serverId) {
-                UdpMessage requestVote = new UdpMessage(MessageType.REQUEST_VOTE, getCurrentGeneration(), serverId, -1);
+                Message requestVote = new Message(MessageType.REQUEST_VOTE, getCurrentGeneration(), serverId, -1);
                 sendMessage(requestVote, nodeAddresses.get(otherNodeId));
             }
         }
@@ -238,7 +230,7 @@ public class UdpMatchingEngineServer {
         }
     }
 
-    private void handleVote(UdpMessage message) {
+    private void handleVote(Message message) {
         if (serverRole == ServerRole.CANDIDATE && message.getGeneration() == getCurrentGeneration()) {
             votes.incrementAndGet(); // incrementa votos
             System.out.println("Node " + serverId + " recebeu um voto. Total: " + votes);
@@ -261,7 +253,7 @@ public class UdpMatchingEngineServer {
         }
     }
 
-    private void sendMessage(UdpMessage message, InetSocketAddress recipient) {
+    private void sendMessage(Message message, InetSocketAddress recipient) {
         try {
             ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
             ObjectOutputStream out = new ObjectOutputStream(byteOut);
@@ -279,7 +271,7 @@ public class UdpMatchingEngineServer {
         while (serverRole == ServerRole.LEADER) {
             for (int otherNodeId : nodeAddresses.keySet()) {
                 if (otherNodeId != serverId) {
-                    UdpMessage heartbeat = new UdpMessage(MessageType.HEARTBEAT, getCurrentGeneration(), serverId, serverId);
+                    Message heartbeat = new Message(MessageType.HEARTBEAT, getCurrentGeneration(), serverId, serverId);
                     sendMessage(heartbeat, nodeAddresses.get(otherNodeId));
                 }
             }

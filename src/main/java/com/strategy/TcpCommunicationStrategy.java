@@ -28,20 +28,23 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
             serverSocket = new ServerSocket(port);
             System.out.println("TCP Server listening on port " + port);
 
-            while (!serverSocket.isClosed()) {
-                try {
-                    Socket clientSocket = serverSocket.accept();
-                    new Thread(() -> handleClientConnection(clientSocket, messageHandler, orderHandler)).start();
-                } catch (IOException e) {
-                    if (!serverSocket.isClosed()) {
-                        System.err.println("Erro ao aceitar conexão: " + e.getMessage());
+            new Thread(() -> {
+                while (!serverSocket.isClosed()) {
+                    try {
+                        Socket clientSocket = serverSocket.accept();
+                        new Thread(() -> handleClientConnection(clientSocket, messageHandler, orderHandler)).start();
+                    } catch (IOException e) {
+                        if (!serverSocket.isClosed()) {
+                            e.printStackTrace();
+                        }
                     }
                 }
-            }
+            }).start();
         } catch (IOException e) {
-            System.err.println("Erro ao iniciar o servidor: " + e.getMessage());
+            e.printStackTrace();
         }
     }
+
 
     private void handleClientConnection(Socket clientSocket, MessageHandler messageHandler, OrderHandler orderHandler) {
         try (ObjectInputStream in = new ObjectInputStream(clientSocket.getInputStream())) {

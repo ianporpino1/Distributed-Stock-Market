@@ -8,25 +8,24 @@ import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 public class HeartbeatManager {
     private final int serverId;
-    
+
     private final Map<Integer, InetSocketAddress> nodeAddresses;
     private CommunicationStrategy strategy;
     private ScheduledExecutorService heartbeatChecker = Executors.newScheduledThreadPool(1);
     private Map<Integer, Long> lastHeartbeatReceivedTimes = new ConcurrentHashMap<>();
     public int heartbeatInterval = 2000;
+    
+    private ScheduledFuture<?> heartbeatTask;
 
     private final List<FailureListener> listeners = new ArrayList<FailureListener>();
 
 
     private final ServerState serverState;
-    
+
     public HeartbeatManager(int serverId, Map<Integer, InetSocketAddress> nodeAddresses,
                             CommunicationStrategy strategy, ServerState serverState) {
         this.serverId = serverId;
@@ -36,7 +35,40 @@ public class HeartbeatManager {
 
         startHeartbeatChecker();
     }
-    
+
+    public void startSendingHeartbeats() {
+        stopSendingHeartbeats();
+        heartbeatTask = heartbeatChecker.scheduleAtFixedRate(
+                this::sendHeartbeats,
+                0,
+                heartbeatInterval,
+                TimeUnit.MILLISECONDS
+        );
+    }
+
+    public void stopSendingHeartbeats() {
+        if (heartbeatTask != null) {
+            heartbeatTask.cancel(false);
+        }
+    }
+
+    private void sendHeartbeats() {
+        if (serverState.getServerRole() == ServerRole.LEADER) {
+            nodeAddresses.forEach((otherNodeId, address) -> {
+                Message heartbeat = new Message(
+                        MessageType.HEARTBEAT,
+                        serverState.getCurrentGeneration(),
+                        serverId,
+                        serverId
+                );
+                System.out.println(heartbeat + " para: " + otherNodeId);
+                strategy.sendMessage(heartbeat, address);
+            });
+        }
+
+    }
+
+
     public void addFailureListener(FailureListener listener) {
         listeners.add(listener);
     }
@@ -46,6 +78,7 @@ public class HeartbeatManager {
                 heartbeatInterval, heartbeatInterval, TimeUnit.MILLISECONDS);
     }
 
+
     private void checkHeartbeatTimeouts() {
         long now = System.currentTimeMillis();
         for (Map.Entry<Integer, Long> entry : lastHeartbeatReceivedTimes.entrySet()) {
@@ -54,12 +87,13 @@ public class HeartbeatManager {
             long timeoutThreshold = 4000;
             if (timeSinceLastHeartbeat >= timeoutThreshold) {
                 System.out.println("Servidor " + entry.getKey() + " considerado falho.");
-                
+
                 notifyNodeFailure(entry.getKey());
             }
         }
 
     }
+
     private void notifyNodeFailure(int failedId) {
         for (FailureListener listener : listeners) {
             listener.onNodeFailure(failedId);
@@ -68,7 +102,7 @@ public class HeartbeatManager {
 
     public void handleHeartbeat(Message message) {
         if (message.getGeneration() >= serverState.getCurrentGeneration()) {
-            if(serverState.getServerRole() != ServerRole.FOLLOWER) serverState.setServerRole(ServerRole.FOLLOWER);
+            if (serverState.getServerRole() != ServerRole.FOLLOWER) serverState.setServerRole(ServerRole.FOLLOWER);
             serverState.setLeaderId(message.getLeaderId());
             serverState.setCurrentGeneration(message.getGeneration());
             lastHeartbeatReceivedTimes.put(message.getSenderId(), System.currentTimeMillis());
@@ -76,22 +110,4 @@ public class HeartbeatManager {
         }
     }
 
-    public void sendHeartbeats() {
-        while (serverState.getServerRole() == ServerRole.LEADER) {
-            nodeAddresses.forEach((otherNodeId, address) -> {
-                if (otherNodeId != serverId) {
-                    Message heartbeat = new Message(MessageType.HEARTBEAT, serverState.getCurrentGeneration(), serverId, serverId);
-                    System.out.println(heartbeat +  " para: " + otherNodeId);
-                    strategy.sendMessage(heartbeat, address);
-                }
-            });
-            try {
-                Thread.sleep(heartbeatInterval);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                System.err.println("Heartbeat sending thread interrupted: " + e.getMessage());
-                break;
-            }
-        }
-    }
 }

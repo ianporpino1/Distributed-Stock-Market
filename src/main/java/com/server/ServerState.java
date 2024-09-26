@@ -2,6 +2,8 @@ package com.server;
 
 import com.patterns.ServerRole;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -10,7 +12,10 @@ public class ServerState {
     private final AtomicInteger currentGeneration = new AtomicInteger(0);
     private volatile ServerRole serverRole = ServerRole.FOLLOWER;
     
-    private final AtomicInteger leaderId = new AtomicInteger(-1);;
+    private final AtomicInteger leaderId = new AtomicInteger(-1);
+
+    private final Map<Integer, Integer> votedForAtGeneration = new ConcurrentHashMap<>();
+    private final AtomicInteger votes = new AtomicInteger(0);
     
     public int getLeaderId() {
         return leaderId.get();
@@ -45,5 +50,21 @@ public class ServerState {
         isLeader.set(role == ServerRole.LEADER);
     }
 
-    
+
+    public Map<Integer, Integer> getVotedForAtGeneration() {
+        return votedForAtGeneration;
+    }
+    public void addVotedForAtGeneration(int nodeId, int generation) {
+        votedForAtGeneration.put(nodeId, generation);
+    }
+
+    public int getVotes() {
+        return votes.get();
+    }
+    public void setVotes(int votes) {
+        this.votes.set(votes);
+    }
+    public void incrementVotes() {
+        votes.incrementAndGet();
+    }
 }

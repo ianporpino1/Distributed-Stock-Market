@@ -10,12 +10,13 @@ import com.strategy.HttpCommunicationStrategy;
 import com.strategy.TcpCommunicationStrategy;
 import com.strategy.UdpCommunicationStrategy;
 
+import java.awt.image.ImageConsumer;
 import java.net.InetSocketAddress;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.StringTokenizer;
 
-public class Server implements MessageHandler, OrderHandler, FailureListener {
+public class Server implements MessageHandler, OrderHandler, FailureListener, LeaderElectedListener {
     private final MatchingEngine matchingEngine;
     private final int serverId;
     private final Map<Integer, InetSocketAddress> nodeAddresses;
@@ -26,7 +27,7 @@ public class Server implements MessageHandler, OrderHandler, FailureListener {
     private final ServerState serverState;
     
     
-    private static int PORT = 9001;
+    private static final int PORT = 9001;
 
     public Server(MatchingEngine matchingEngine, int serverId,
                   Map<Integer, InetSocketAddress> nodeAddresses,
@@ -39,10 +40,11 @@ public class Server implements MessageHandler, OrderHandler, FailureListener {
         
         this.heartbeatManager = new HeartbeatManager(serverId, nodeAddresses, strategy, serverState);
         
-        this.electionManager = new ElectionManager(serverId, nodeAddresses, strategy, heartbeatManager, serverState);
+        this.electionManager = new ElectionManager(serverId, nodeAddresses, strategy, serverState);
         
 
         this.heartbeatManager.addFailureListener(this);
+        this.electionManager.addLeaderElectedListener(this);
     }
 
     public void start() {
@@ -58,19 +60,23 @@ public class Server implements MessageHandler, OrderHandler, FailureListener {
             electionManager.startElection();
         }
     }
+    @Override
+    public void onLeaderElected(){
+        heartbeatManager.startSendingHeartbeats();
+    }
 
     public void handleMessage(Message message, InetSocketAddress sender) {
         switch (message.getType()) {
             case REQUEST_VOTE:
-                System.out.println("Received request vote from " + sender.getPort());
-                electionManager.handleRequestVote(message);
+                System.out.println("Received request vote from " + message.getSenderId());
+                electionManager.handleVoteRequest(message);
                 break;
             case VOTE:
-                System.out.println("Received vote from " + sender.getPort());
-                electionManager.handleVote(message);
+                System.out.println("Received vote from " + message.getSenderId());
+                electionManager.handleVoteResponse(message);
                 break;
             case HEARTBEAT:
-                System.out.println("Received heartbeat from " + sender.getPort());
+                System.out.println("Received heartbeat from " + message.getSenderId());
                 heartbeatManager.handleHeartbeat(message);
                 break;
             default:

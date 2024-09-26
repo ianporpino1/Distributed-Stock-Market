@@ -15,7 +15,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.StringTokenizer;
 
-public class Server implements MessageHandler, OrderHandler {
+public class Server implements MessageHandler, OrderHandler, FailureListener {
     private final MatchingEngine matchingEngine;
     private final int serverId;
     private final Map<Integer, InetSocketAddress> nodeAddresses;
@@ -42,7 +42,7 @@ public class Server implements MessageHandler, OrderHandler {
         this.electionManager = new ElectionManager(serverId, nodeAddresses, strategy, heartbeatManager, serverState);
         
 
-        this.heartbeatManager.addLeaderFailureListener(electionManager);
+        this.heartbeatManager.addFailureListener(this);
     }
 
     public void start() {
@@ -147,5 +147,12 @@ public class Server implements MessageHandler, OrderHandler {
         System.out.println("NodeAddresses: " + nodeAddresses);
         
         server.start();
+    }
+
+    @Override
+    public void onNodeFailure(int failedId) {
+        if(serverState.getLeaderId() == failedId){
+            electionManager.startElection();
+        }
     }
 }

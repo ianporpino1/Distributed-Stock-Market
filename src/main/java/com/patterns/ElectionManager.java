@@ -1,19 +1,20 @@
 package com.patterns;
 
-import com.server.LeaderFailureListener;
+import com.server.FailureListener;
 import com.server.ServerState;
 import com.strategy.CommunicationStrategy;
 
 import java.net.InetSocketAddress;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class ElectionManager implements LeaderFailureListener {
+public class ElectionManager {
     private final int serverId;
     private final ServerState serverState;
 
-    private final AtomicInteger votedFor = new AtomicInteger(-1);
+    private final Map<Integer, Integer> votedForAtGeneration = new ConcurrentHashMap<>();
     private final AtomicInteger votes = new AtomicInteger(0);
     private final Map<Integer, InetSocketAddress> nodeAddresses;
     
@@ -31,20 +32,12 @@ public class ElectionManager implements LeaderFailureListener {
         this.strategy = strategy;
         this.heartbeatManager = heartbeatManager;
     }
-
-    @Override
-    public void onLeaderFailure() {
-        if(serverState.getLeaderId() == -1 && !serverState.isElectionInProgress()){
-            System.out.println("Falha no líder detectada. Iniciando nova eleição...");
-            serverState.setElectionInProgress(true);
-            startElection();
-        }
-    }
+    
 
     public void startElectionTimeout() {
         try {
             Thread.sleep(electionTimeout + new Random().nextInt(2000));
-            if (serverState.getLeaderId() == -1 && !serverState.isElectionInProgress()) {
+            if (serverState.getLeaderId() == -1) {
                 startElection();
             }
         } catch (InterruptedException e) {
@@ -56,7 +49,7 @@ public class ElectionManager implements LeaderFailureListener {
         serverState.incrementGeneration();
         System.out.println("Iniciando Election... Generation: " + serverState.getCurrentGeneration());
         serverState.setServerRole(ServerRole.CANDIDATE);
-        votedFor.set(serverId);
+        votedForAtGeneration.put(serverId, serverState.getCurrentGeneration());
         votes.set(1);
 
         for (int otherNodeId : nodeAddresses.keySet()) {
@@ -79,17 +72,19 @@ public class ElectionManager implements LeaderFailureListener {
         }
 
         if (serverState.getServerRole() == ServerRole.CANDIDATE && votes.get() <= (nodeAddresses.size() / 2)) {
-            System.out.println("Nenhuma resposta de outros nós. Node " + serverId + " se tornando líder.");
-            serverState.setElectionInProgress(false);
-            becomeLeader();
+            System.out.println("Nenhuma resposta de outros nós. Node " + serverId + " voltando a follower.");
+
+            startElection();
         }
     }
 
     public void handleRequestVote(Message message) {
         if (message.getGeneration() >= serverState.getCurrentGeneration()) {
             serverState.setCurrentGeneration(message.getGeneration());
-            if (votedFor.get() == -1 || votedFor.get() == message.getSenderId()) {
-                votedFor.set(message.getSenderId());
+            if (votedForAtGeneration.getOrDefault(serverState.getCurrentGeneration(), -1) == -1) {
+                votedForAtGeneration.put(serverState.getCurrentGeneration(), message.getSenderId());
+                System.out.println(serverId + " votou para " + message.getSenderId() + " na geração " + serverState.getCurrentGeneration() + ".");
+
                 Message vote = new Message(MessageType.VOTE, serverState.getCurrentGeneration(), serverId, -1);
                 strategy.sendMessage(vote, nodeAddresses.get(message.getSenderId()));
             }
@@ -111,15 +106,15 @@ public class ElectionManager implements LeaderFailureListener {
 
     private void becomeLeader() {
         serverState.setServerRole(ServerRole.LEADER);
+        serverState.setLeaderId(serverId);
         votes.set(0);
         new Thread(heartbeatManager::sendHeartbeats).start();
 
-        //talvez um aviso p o heartbeatmanager comecar a enviar heartbeats
+        //talvez um listener p o heartbeatmanager comecar a enviar heartbeats
     }
     
     private void becomeFollower() {
         serverState.setServerRole(ServerRole.FOLLOWER);
-        serverState.setElectionInProgress(false);
     }
 
    

@@ -9,7 +9,7 @@ public class ServerState {
     private final AtomicBoolean isLeader = new AtomicBoolean(false);
     private final AtomicInteger currentGeneration = new AtomicInteger(0);
     private volatile ServerRole serverRole = ServerRole.FOLLOWER;
-    private final AtomicBoolean electionInProgress = new AtomicBoolean(false);
+    
     private final AtomicInteger leaderId = new AtomicInteger(-1);;
     
     public int getLeaderId() {
@@ -45,11 +45,5 @@ public class ServerState {
         isLeader.set(role == ServerRole.LEADER);
     }
 
-    public boolean isElectionInProgress() {
-        return electionInProgress.get();
-    }
-
-    public void setElectionInProgress(boolean electionInProgress) {
-        this.electionInProgress.set(electionInProgress);
-    }
+    
 }

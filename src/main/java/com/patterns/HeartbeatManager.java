@@ -1,6 +1,6 @@
 package com.patterns;
 
-import com.server.LeaderFailureListener;
+import com.server.FailureListener;
 import com.server.ServerState;
 import com.strategy.CommunicationStrategy;
 
@@ -22,7 +22,7 @@ public class HeartbeatManager {
     private Map<Integer, Long> lastHeartbeatReceivedTimes = new ConcurrentHashMap<>();
     public int heartbeatInterval = 2000;
 
-    private final List<LeaderFailureListener> listeners = new ArrayList<>();
+    private final List<FailureListener> listeners = new ArrayList<FailureListener>();
 
 
     private final ServerState serverState;
@@ -37,7 +37,7 @@ public class HeartbeatManager {
         startHeartbeatChecker();
     }
     
-    public void addLeaderFailureListener(LeaderFailureListener listener) {
+    public void addFailureListener(FailureListener listener) {
         listeners.add(listener);
     }
 
@@ -55,26 +55,20 @@ public class HeartbeatManager {
             if (timeSinceLastHeartbeat >= timeoutThreshold) {
                 System.out.println("Servidor " + entry.getKey() + " considerado falho.");
                 
-                if (serverState.getLeaderId() == entry.getKey()) {
-                    System.out.println("LIDER " + serverState.getLeaderId() + " FALHOU..."  );
-                    serverState.setLeaderId(-1);
-                    
-                    notifyLeaderFailure();
-                }
+                notifyNodeFailure(entry.getKey());
             }
         }
 
     }
-    private void notifyLeaderFailure() {
-        for (LeaderFailureListener listener : listeners) {
-            listener.onLeaderFailure();
+    private void notifyNodeFailure(int failedId) {
+        for (FailureListener listener : listeners) {
+            listener.onNodeFailure(failedId);
         }
     }
 
     public void handleHeartbeat(Message message) {
         if (message.getGeneration() >= serverState.getCurrentGeneration()) {
             if(serverState.getServerRole() != ServerRole.FOLLOWER) serverState.setServerRole(ServerRole.FOLLOWER);
-            serverState.setElectionInProgress(false);
             serverState.setLeaderId(message.getLeaderId());
             serverState.setCurrentGeneration(message.getGeneration());
             lastHeartbeatReceivedTimes.put(message.getSenderId(), System.currentTimeMillis());

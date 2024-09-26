@@ -52,6 +52,13 @@ public class Server implements MessageHandler, OrderHandler, FailureListener {
 
     }
 
+    @Override
+    public void onNodeFailure(int failedId) {
+        if(serverState.getLeaderId() == failedId){
+            electionManager.startElection();
+        }
+    }
+
     public void handleMessage(Message message, InetSocketAddress sender) {
         switch (message.getType()) {
             case REQUEST_VOTE:
@@ -147,12 +154,5 @@ public class Server implements MessageHandler, OrderHandler, FailureListener {
         System.out.println("NodeAddresses: " + nodeAddresses);
         
         server.start();
-    }
-
-    @Override
-    public void onNodeFailure(int failedId) {
-        if(serverState.getLeaderId() == failedId){
-            electionManager.startElection();
-        }
     }
 }

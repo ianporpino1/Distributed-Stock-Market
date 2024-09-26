@@ -95,7 +95,7 @@ public class Server implements MessageHandler, OrderHandler, FailureListener, Le
                 
                 //RESPOSTA AO GATEWAY
                 String response = "Order processed: " + order;
-                strategy.sendMessage(new Response(MessageType.RESPONSE,response), sender);
+                strategy.sendMessage(new Response(MessageType.RESPONSE, response), sender);
             }
         } else {
             System.out.println("Formato de ordem inválido: " + orderMessage);

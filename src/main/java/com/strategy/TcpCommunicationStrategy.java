@@ -1,6 +1,7 @@
 package com.strategy;
 
 import com.patterns.Message;
+import com.patterns.OrderMessage;
 import com.server.MessageHandler;
 import com.server.OrderHandler;
 
@@ -47,16 +48,36 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
 
 
     private void handleClientConnection(Socket clientSocket, MessageHandler messageHandler, OrderHandler orderHandler) {
-        try (ObjectInputStream in = new ObjectInputStream(clientSocket.getInputStream())) {
-            Object receivedObject = in.readObject();
-            InetSocketAddress remoteAddress = (InetSocketAddress) clientSocket.getRemoteSocketAddress();
+        try {
+            InputStream inputStream = clientSocket.getInputStream();
+            BufferedInputStream bis = new BufferedInputStream(inputStream);
+            bis.mark(4);
+
+            byte[] header = new byte[4];
+            bis.read(header, 0, 4);
+            bis.reset();
+
             
-            if (receivedObject instanceof Message message) {
-                messageHandler.handleMessage(message, remoteAddress);
-            } else if (receivedObject instanceof String && ((String) receivedObject).startsWith("ORDER")) {
-                orderHandler.handleOrder((String) receivedObject, remoteAddress);
+            String headerString = new String(header);
+
+            if (headerString.equals("ORDE")) {
+                BufferedReader reader = new BufferedReader(new InputStreamReader(bis));
+                String receivedString = reader.readLine();
+                InetSocketAddress remoteAddress = (InetSocketAddress) clientSocket.getRemoteSocketAddress();
+
+                if (receivedString.startsWith("ORDER")) {
+                    orderHandler.handleOrder(receivedString, remoteAddress);
+                }
             } else {
-                System.err.println("Tipo de mensagem não suportado: " + receivedObject.getClass().getName());
+                ObjectInputStream in = new ObjectInputStream(bis);
+                Object receivedObject = in.readObject();
+                InetSocketAddress remoteAddress = (InetSocketAddress) clientSocket.getRemoteSocketAddress();
+
+                if (receivedObject instanceof Message message) {
+                    messageHandler.handleMessage(message, remoteAddress);
+                } else {
+                    System.err.println("Tipo de mensagem não suportado: " + receivedObject.getClass().getName());
+                }
             }
         } catch (EOFException e) {
             System.err.println("Conexão fechada pelo cliente.");
@@ -70,4 +91,5 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
             }
         }
     }
+
 }

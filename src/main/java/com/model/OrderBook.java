@@ -1,20 +1,21 @@
 package com.model;
 
 import java.util.*;
+import java.util.concurrent.PriorityBlockingQueue;
 
 public class OrderBook {
-    private final PriorityQueue<Order> buyOrders;
-    private final PriorityQueue<Order> sellOrders;
+    private final PriorityBlockingQueue<Order> buyOrders;
+    private final PriorityBlockingQueue<Order> sellOrders;
 
     public OrderBook() {
-        this.buyOrders = new PriorityQueue<>((o1, o2) -> {
+        this.buyOrders = new PriorityBlockingQueue<>(1,(o1, o2) -> {
             int priceComparison = Double.compare(o2.getPrice(), o1.getPrice());
             if (priceComparison == 0) {
                 return o1.getReceivedAt().compareTo(o2.getReceivedAt());
             }
             return priceComparison;
         });
-        this.sellOrders = new PriorityQueue<>((o1, o2) -> {
+        this.sellOrders = new PriorityBlockingQueue<>(1,(o1, o2) -> {
             int priceComparison = Double.compare(o1.getPrice(), o2.getPrice());
             if (priceComparison == 0) {
                 return o1.getReceivedAt().compareTo(o2.getReceivedAt());
@@ -58,4 +59,3 @@ public class OrderBook {
         return new ArrayList<>(sellOrders);
     }
 }
-

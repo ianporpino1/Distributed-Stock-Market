@@ -37,7 +37,6 @@ public class HeartbeatManager {
     }
 
     public void startSendingHeartbeats() {
-        stopSendingHeartbeats();
         heartbeatTask = heartbeatChecker.scheduleAtFixedRate(
                 this::sendHeartbeats,
                 0,
@@ -65,7 +64,9 @@ public class HeartbeatManager {
                 strategy.sendMessage(heartbeat, address);
             });
         }
-
+        else{
+            stopSendingHeartbeats();
+        }
     }
 
 

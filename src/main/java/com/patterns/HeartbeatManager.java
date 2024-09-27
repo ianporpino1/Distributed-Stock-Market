@@ -18,10 +18,14 @@ public class HeartbeatManager {
     private ScheduledExecutorService heartbeatChecker = Executors.newScheduledThreadPool(1);
     private Map<Integer, Long> lastHeartbeatReceivedTimes = new ConcurrentHashMap<>();
     public int heartbeatInterval = 2000;
-    
+
     private ScheduledFuture<?> heartbeatTask;
 
-    private final List<FailureListener> listeners = new ArrayList<FailureListener>();
+    //simulacao pausa do lider
+    private int actionCount = 0;
+    private final int maxActionsBeforePause = 5;
+
+    private final List<FailureListener> listeners = new ArrayList<>();
 
 
     private final ServerState serverState;
@@ -64,6 +68,9 @@ public class HeartbeatManager {
                 System.out.println(heartbeat + " para: " + otherNodeId);
                 strategy.sendMessage(heartbeat, address);
             });
+        }
+        else {
+            stopSendingHeartbeats();
         }
 
     }

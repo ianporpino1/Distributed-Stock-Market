@@ -1,11 +1,17 @@
-package com.udp;
+package com.gateway;
 
+import com.patterns.HeartbeatManager;
+import com.patterns.Message;
+import com.server.FailureListener;
+import com.server.MessageHandler;
+import com.server.OrderHandler;
 import com.strategy.CommunicationStrategy;
 
 import java.io.IOException;
 import java.net.*;
+import java.util.Map;
 
-public class ApiGateway {
+public class ApiGateway implements FailureListener, MessageHandler, OrderHandler {
 
     private static final String[] INSTANCES_IP = {"127.0.0.1", "127.0.0.1", "127.0.0.1"};
     private static final int[] INSTANCES_PORT = {9001, 9002, 9003};
@@ -14,12 +20,60 @@ public class ApiGateway {
     
     private final CommunicationStrategy strategy;
 
+    private final Map<Integer, InetSocketAddress> nodeAddresses;
+    private final Map<Integer, Boolean> activeNodes;
+    
+    private final HeartbeatManager heartbeatManager;
 
     private static int currentInstanceIndex = 0;
 
-    public ApiGateway(CommunicationStrategy strategy) {
+    public ApiGateway(CommunicationStrategy strategy, Map<Integer, InetSocketAddress> nodeAddresses, Map<Integer, Boolean> activeNodes, HeartbeatManager heartbeatManager) {
         this.strategy = strategy;
+        this.nodeAddresses = nodeAddresses;
+        this.activeNodes = activeNodes;
+        this.heartbeatManager = heartbeatManager;
+        
+        this.heartbeatManager.addFailureListener(this);
     }
+    
+    private void start() {
+        new Thread(() -> strategy.startListening(GATEWAY_PORT, this, this)).start();
+    }
+
+
+    @Override
+    public void onNodeFailure(int failedId) {
+        //modificar active nodes
+        activeNodes.replace(failedId, false);
+    }
+
+    @Override
+    public void handleMessage(Message message, InetSocketAddress sender) {
+        //tratar heartbeats
+    }
+
+    @Override
+    public void handleOrder(String orderMessage, InetSocketAddress sender) {
+        //verificar e redirecionar order
+    }
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 
     public static void main(String[] args) {
         try (DatagramSocket gatewaySocket = new DatagramSocket(GATEWAY_PORT)) {
@@ -107,4 +161,6 @@ public class ApiGateway {
         }
     }
 
+
+    
 }

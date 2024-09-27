@@ -51,7 +51,6 @@ public class Server implements MessageHandler, OrderHandler, FailureListener, Le
         new Thread(() -> strategy.startListening(serverId + PORT, this, this)).start();
         
         electionManager.startElectionTimeout();
-
     }
 
     @Override

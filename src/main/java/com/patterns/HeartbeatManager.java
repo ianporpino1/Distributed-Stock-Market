@@ -15,9 +15,9 @@ public class HeartbeatManager {
 
     private final Map<Integer, InetSocketAddress> nodeAddresses;
     private CommunicationStrategy strategy;
-    private ScheduledExecutorService heartbeatChecker = Executors.newScheduledThreadPool(1);
-    private Map<Integer, Long> lastHeartbeatReceivedTimes = new ConcurrentHashMap<>();
-    public int heartbeatInterval = 2000;
+    private ScheduledExecutorService heartbeatChecker = Executors.newScheduledThreadPool(1); //provavelmente tera de ser 2 threads
+    private Map<Integer, Long> lastHeartbeatReceivedTimes = new ConcurrentHashMap<>();// uma para enviar heartbeats para o gateway e outra p receber
+    public int heartbeatInterval = 2000;                                              // heartbeats do lider
     
     private ScheduledFuture<?> heartbeatTask;
 
@@ -51,7 +51,7 @@ public class HeartbeatManager {
         }
     }
 
-    private void sendHeartbeats() {
+    private void sendHeartbeats() { //provalvelmente vai ser modificado
         if (serverState.getServerRole() == ServerRole.LEADER) {
             nodeAddresses.forEach((otherNodeId, address) -> {
                 Message heartbeat = new Message(
@@ -84,7 +84,6 @@ public class HeartbeatManager {
         long now = System.currentTimeMillis();
         for (Map.Entry<Integer, Long> entry : lastHeartbeatReceivedTimes.entrySet()) {
             long timeSinceLastHeartbeat = now - entry.getValue();
-            System.out.println("Tempo desde o último heartbeat do servidor " + entry.getKey() + ": " + timeSinceLastHeartbeat);
             long timeoutThreshold = 4000;
             if (timeSinceLastHeartbeat >= timeoutThreshold) {
                 System.out.println("Servidor " + entry.getKey() + " considerado falho.");
@@ -100,7 +99,8 @@ public class HeartbeatManager {
             listener.onNodeFailure(failedId);
         }
     }
-
+    
+    //talvez add listener onLeaderDetected, talvez nem precise, pq quem chama esse metodo eh o server
     public void handleHeartbeat(Message message) {
         if (message.getGeneration() >= serverState.getCurrentGeneration()) {
             if (serverState.getServerRole() != ServerRole.FOLLOWER) serverState.setServerRole(ServerRole.FOLLOWER);

@@ -54,7 +54,7 @@ public class ApiGateway implements FailureListener, MessageHandler, OrderHandler
 
     @Override
     public void handleOrder(String orderMessage, InetSocketAddress sender) {
-        //verificar e redirecionar order
+        //verificar, usar round robin e redirecionar order para active nodes
     }
     
     

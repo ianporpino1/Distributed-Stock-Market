@@ -18,15 +18,6 @@ set SERVER_3_NODES=0 1
 
 echo Compilando classes Java...
 
-:: Compila as classes Java usando um loop for
-for %%f in (src/com/server/*.java) do (
-    javac -d target/classes %%f
-    if errorlevel 1 (
-        echo Erro ao compilar %%f. Verifique o código-fonte e tente novamente.
-        exit /b 1
-    )
-)
-
 echo Iniciando servidores com protocolo %PROTOCOL%...
 
 :: Inicia o primeiro servidor

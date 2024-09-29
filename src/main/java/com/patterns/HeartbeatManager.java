@@ -103,11 +103,13 @@ public class HeartbeatManager {
     //talvez add listener onLeaderDetected, talvez nem precise, pq quem chama esse metodo eh o server
     public void handleHeartbeat(Message message) {
         if (message.getGeneration() >= serverState.getCurrentGeneration()) {
-            if (serverState.getServerRole() != ServerRole.FOLLOWER) serverState.setServerRole(ServerRole.FOLLOWER);
+            if (serverState.getServerRole() != ServerRole.FOLLOWER){
+                serverState.setServerRole(ServerRole.FOLLOWER);
+                System.out.println("Node " + serverId + " reconhece o líder " + message.getLeaderId() + " no termo " + serverState.getCurrentGeneration());
+            } 
             serverState.setLeaderId(message.getLeaderId());
             serverState.setCurrentGeneration(message.getGeneration());
             lastHeartbeatReceivedTimes.put(message.getSenderId(), System.currentTimeMillis());
-            System.out.println("Node " + serverId + " reconhece o líder " + message.getLeaderId() + " no termo " + serverState.getCurrentGeneration());
         }
     }
 

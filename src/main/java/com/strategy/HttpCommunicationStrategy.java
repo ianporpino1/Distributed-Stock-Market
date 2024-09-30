@@ -1,6 +1,8 @@
 package com.strategy;
 
 import com.patterns.Message;
+import com.patterns.OrderMessage;
+import com.patterns.Request;
 import com.server.MessageHandler;
 import com.server.OrderHandler;
 
@@ -8,7 +10,12 @@ import java.net.InetSocketAddress;
 
 import java.io.*;
 import java.net.*;
-import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.util.HashMap;
+import java.util.Map;
+
+import java.io.*;
+import java.net.*;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
@@ -17,14 +24,14 @@ public class HttpCommunicationStrategy implements CommunicationStrategy {
     private ServerSocket serverSocket;
 
     @Override
-    public void sendMessage(Message message, InetSocketAddress recipient) {
+    public void sendRequest(Request request, InetSocketAddress recipient) {
         try (Socket socket = new Socket(recipient.getAddress(), recipient.getPort());
              OutputStream out = socket.getOutputStream();
              BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(out))) {
 
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             ObjectOutputStream oos = new ObjectOutputStream(baos);
-            oos.writeObject(message);
+            oos.writeObject(request);
             oos.flush();
             byte[] serializedMessage = baos.toByteArray();
 
@@ -86,19 +93,23 @@ public class HttpCommunicationStrategy implements CommunicationStrategy {
             String encodedContent = new String(contentBuffer);
 
             InetSocketAddress remoteAddress = (InetSocketAddress) clientSocket.getRemoteSocketAddress();
+            byte[] serializedMessage = Base64.getDecoder().decode(encodedContent);
 
-            if (encodedContent.startsWith("ORDER")) {
-                orderHandler.handleOrder(encodedContent, remoteAddress);
-            } else {
-                byte[] serializedMessage = Base64.getDecoder().decode(encodedContent);
+            // Deserialize Request object from the encoded content
+            ByteArrayInputStream bais = new ByteArrayInputStream(serializedMessage);
+            ObjectInputStream ois = new ObjectInputStream(bais);
+            Request requestObject = (Request) ois.readObject();
 
-                ByteArrayInputStream bais = new ByteArrayInputStream(serializedMessage);
-                ObjectInputStream ois = new ObjectInputStream(bais);
-                Message message = (Message) ois.readObject();
-
+            // Process the Request based on its type
+            if (requestObject.getType() == Request.RequestType.ORDER) {
+                OrderMessage orderMessage = requestObject.getOrder();
+                orderHandler.handleOrder(orderMessage, remoteAddress);
+            } else if (requestObject.getType() == Request.RequestType.MESSAGE) {
+                Message message = requestObject.getMessage();
                 messageHandler.handleMessage(message, remoteAddress);
             }
 
+            // Send HTTP response
             String response = "HTTP/1.1 200 OK\r\n" +
                     "Content-Type: text/plain\r\n" +
                     "Content-Length: 2\r\n" +
@@ -130,3 +141,4 @@ public class HttpCommunicationStrategy implements CommunicationStrategy {
         return headers;
     }
 }
+

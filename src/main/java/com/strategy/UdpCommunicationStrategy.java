@@ -1,7 +1,6 @@
 package com.strategy;
 
-import com.patterns.Message;
-import com.patterns.MessageType;
+import com.patterns.Request;
 import com.server.MessageHandler;
 import com.server.OrderHandler;
 
@@ -9,56 +8,87 @@ import java.io.*;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
+
+
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.net.SocketException;
-import java.nio.charset.StandardCharsets;
+
 
 public class UdpCommunicationStrategy implements CommunicationStrategy {
     private DatagramSocket socket;
 
     @Override
-    public void sendMessage(Message message, InetSocketAddress recipient) {
+    public void sendRequest(Request request, InetSocketAddress recipient) {
         try {
-            ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
-            ObjectOutputStream out = new ObjectOutputStream(byteOut);
-            out.writeObject(message);
-            byte[] data = byteOut.toByteArray();
+            
 
-            DatagramPacket packet = new DatagramPacket(data, data.length, recipient.getAddress(), recipient.getPort());
+            byte[] buffer = serializeRequest(request);
+            DatagramPacket packet = new DatagramPacket(buffer, buffer.length, recipient);
             socket.send(packet);
+            
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
     @Override
-    public void startListening(int port, MessageHandler messageHandler, OrderHandler orderHandler) {
+    public void startListening(int port, MessageHandler handler, OrderHandler orderHandler) {
         try {
             socket = new DatagramSocket(port);
-            new Thread(() -> {
-                byte[] receiveBuffer = new byte[1024];
-                while (!socket.isClosed()) {
-                    try {
-                        DatagramPacket packet = new DatagramPacket(receiveBuffer, receiveBuffer.length);
-                        socket.receive(packet);
+            System.out.println("Listening on port: " + port);
 
-                        String messageStr = new String(packet.getData(), 0, packet.getLength(), StandardCharsets.UTF_8);
-                        if (messageStr.startsWith("ORDER")) {
-                            orderHandler.handleOrder(messageStr, (InetSocketAddress) packet.getSocketAddress());
-                        } else {
-                            ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(packet.getData(), 0, packet.getLength()));
-                            Message message = (Message) in.readObject();
-                            messageHandler.handleMessage(message, (InetSocketAddress) packet.getSocketAddress());
-                        }
-                    } catch (Exception e) {
-                        if (!socket.isClosed()) {
-                            e.printStackTrace();
-                        }
+            new Thread(() -> {
+                byte[] buffer = new byte[1024];
+                while (!socket.isClosed()) {
+                    DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+                    try {
+                        socket.receive(packet);
+                        
+                        Request request = deserializeRequest(packet.getData());
+
+                        processRequest(request, handler, orderHandler, (InetSocketAddress) packet.getSocketAddress());
+                    } catch (IOException | ClassNotFoundException e) {
+                        throw new RuntimeException(e);
                     }
+
+
                 }
             }).start();
+
         } catch (SocketException e) {
-            e.printStackTrace();
+            throw new RuntimeException(e);
         }
     }
-    
-}
+
+        private byte[] serializeRequest (Request request) throws IOException {
+            try (ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+                 ObjectOutputStream out = new ObjectOutputStream(byteOut)) {
+                out.writeObject(request);
+                return byteOut.toByteArray();
+            }
+        }
+
+        private Request deserializeRequest ( byte[] data) throws IOException, ClassNotFoundException {
+            try (ByteArrayInputStream byteIn = new ByteArrayInputStream(data);
+                 ObjectInputStream in = new ObjectInputStream(byteIn)) {
+                return (Request) in.readObject();
+            }
+        }
+
+        private void processRequest (Request request, MessageHandler handler, OrderHandler
+        orderHandler, InetSocketAddress sender){
+            switch (request.getType()) {
+                case MESSAGE:
+                    handler.handleMessage(request.getMessage(), sender);
+                    break;
+                case ORDER:
+                    orderHandler.handleOrder(request.getOrder(), sender);
+                    break;
+                case RESPONSE:
+                    // Implementar o que fazer com uma resposta, se necessário
+                    break;
+            }
+        }
+    }

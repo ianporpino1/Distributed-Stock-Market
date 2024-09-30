@@ -2,8 +2,12 @@ package com.strategy;
 
 import com.patterns.Message;
 import com.patterns.OrderMessage;
+import com.patterns.Request;
 import com.server.MessageHandler;
 import com.server.OrderHandler;
+
+import java.io.*;
+import java.net.*;
 
 import java.io.*;
 import java.net.*;
@@ -12,11 +16,11 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
     private ServerSocket serverSocket;
 
     @Override
-    public void sendMessage(Message message, InetSocketAddress recipient) {
+    public void sendRequest(Request request, InetSocketAddress recipient) {
         try (Socket socket = new Socket(recipient.getAddress(), recipient.getPort());
              ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream())) {
 
-            out.writeObject(message);
+            out.writeObject(request);
             out.flush();
         } catch (IOException e) {
             System.err.println("Erro ao enviar mensagem: " + e.getMessage());
@@ -46,39 +50,25 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
         }
     }
 
-
     private void handleClientConnection(Socket clientSocket, MessageHandler messageHandler, OrderHandler orderHandler) {
         try {
-            InputStream inputStream = clientSocket.getInputStream();
-            BufferedInputStream bis = new BufferedInputStream(inputStream);
-            bis.mark(4);
+            ObjectInputStream in = new ObjectInputStream(clientSocket.getInputStream());
+            InetSocketAddress remoteAddress = (InetSocketAddress) clientSocket.getRemoteSocketAddress();
 
-            byte[] header = new byte[4];
-            bis.read(header, 0, 4);
-            bis.reset();
+            // Deserialize the Request object
+            Request requestObject = (Request) in.readObject();
 
-            
-            String headerString = new String(header);
-
-            if (headerString.equals("ORDE")) {
-                BufferedReader reader = new BufferedReader(new InputStreamReader(bis));
-                String receivedString = reader.readLine();
-                InetSocketAddress remoteAddress = (InetSocketAddress) clientSocket.getRemoteSocketAddress();
-
-                if (receivedString.startsWith("ORDER")) {
-                    orderHandler.handleOrder(receivedString, remoteAddress);
-                }
+            // Process the Request based on its type
+            if (requestObject.getType() == Request.RequestType.ORDER) {
+                OrderMessage orderMessage = requestObject.getOrder();
+                orderHandler.handleOrder(orderMessage, remoteAddress);
+            } else if (requestObject.getType() == Request.RequestType.MESSAGE) {
+                Message message = requestObject.getMessage();
+                messageHandler.handleMessage(message, remoteAddress);
             } else {
-                ObjectInputStream in = new ObjectInputStream(bis);
-                Object receivedObject = in.readObject();
-                InetSocketAddress remoteAddress = (InetSocketAddress) clientSocket.getRemoteSocketAddress();
-
-                if (receivedObject instanceof Message message) {
-                    messageHandler.handleMessage(message, remoteAddress);
-                } else {
-                    System.err.println("Tipo de mensagem não suportado: " + receivedObject.getClass().getName());
-                }
+                System.err.println("Tipo de requisição não suportado: " + requestObject.getType());
             }
+
         } catch (EOFException e) {
             System.err.println("Conexão fechada pelo cliente.");
         } catch (IOException | ClassNotFoundException e) {
@@ -91,5 +81,4 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
             }
         }
     }
-
 }

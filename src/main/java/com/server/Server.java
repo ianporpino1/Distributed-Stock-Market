@@ -10,7 +10,6 @@ import com.strategy.HttpCommunicationStrategy;
 import com.strategy.TcpCommunicationStrategy;
 import com.strategy.UdpCommunicationStrategy;
 
-import java.awt.image.ImageConsumer;
 import java.net.InetSocketAddress;
 import java.util.HashMap;
 import java.util.Map;
@@ -25,8 +24,8 @@ public class Server implements MessageHandler, OrderHandler, FailureListener, Le
     private final HeartbeatManager heartbeatManager;
 
     private final ServerState serverState;
-    
-    
+
+
     private static final int PORT = 9001;
 
     public Server(MatchingEngine matchingEngine, int serverId,
@@ -37,11 +36,11 @@ public class Server implements MessageHandler, OrderHandler, FailureListener, Le
         this.nodeAddresses = nodeAddresses;
         this.strategy = strategy;
         this.serverState = new ServerState();
-        
-        this.heartbeatManager = new HeartbeatManager(serverId, nodeAddresses, strategy, serverState);
-        
+
+        this.heartbeatManager = new HeartbeatManager(nodeAddresses, strategy);
+
         this.electionManager = new ElectionManager(serverId, nodeAddresses, strategy, serverState);
-        
+
 
         this.heartbeatManager.addFailureListener(this);
         this.electionManager.addLeaderElectedListener(this);
@@ -49,19 +48,21 @@ public class Server implements MessageHandler, OrderHandler, FailureListener, Le
 
     public void start() {
         new Thread(() -> strategy.startListening(serverId + PORT, this, this)).start();
-        
+
         electionManager.startElectionTimeout();
     }
 
     @Override
     public void onNodeFailure(int failedId) {
-        if(serverState.getLeaderId() == failedId){
+        if (serverState.getLeaderId() == failedId) {
             electionManager.startElection();
         }
     }
+
     @Override
-    public void onLeaderElected(){
-        heartbeatManager.startSendingHeartbeats();
+    public void onLeaderElected() {
+        Message heartbeat = new Message(MessageType.HEARTBEAT, serverState.getCurrentGeneration(), serverId, serverId);
+        heartbeatManager.startSendingHeartbeats(heartbeat);
     }
 
     public void handleMessage(Message message, InetSocketAddress sender) {
@@ -76,51 +77,43 @@ public class Server implements MessageHandler, OrderHandler, FailureListener, Le
                 break;
             case HEARTBEAT:
                 System.out.println("Received heartbeat from " + message.getSenderId());
-                heartbeatManager.handleHeartbeat(message);
+                handleHeartbeat(message);
                 break;
             default:
                 System.out.println("Tipo de mensagem desconhecido: " + message.getType());
         }
     }
-    
+
+
+    public void handleHeartbeat(Message message) {
+        if (message.getGeneration() >= serverState.getCurrentGeneration()) {
+            if (serverState.getServerRole() != ServerRole.FOLLOWER) {
+                serverState.setServerRole(ServerRole.FOLLOWER);
+                System.out.println("Node " + serverId + " reconhece o líder " + message.getLeaderId() + " no termo " + serverState.getCurrentGeneration());
+            }
+            serverState.setLeaderId(message.getLeaderId());
+            serverState.setCurrentGeneration(message.getGeneration());
+            heartbeatManager.lastHeartbeatReceivedTimes.put(message.getSenderId(), System.currentTimeMillis());
+            heartbeatManager.failedServers.remove(serverId);
+        }
+    }
+
     @Override
-    public void handleOrder(String orderMessage, InetSocketAddress sender) {
+    public void handleOrder(OrderMessage orderMessage, InetSocketAddress sender) {
         System.out.println("Ordem recebida: " + orderMessage);
-        String[] parts = orderMessage.split(":", 2);
-        if (parts.length == 2 && parts[0].equals("ORDER")) {
-            Order order = parseOrder(parts[1]);
-            if (order != null) {
-                matchingEngine.processOrder(order);
-                
-                //RESPOSTA AO GATEWAY
-                String response = "Order processed: " + order;
-                strategy.sendMessage(new Response(MessageType.RESPONSE, response), sender);
-            }
-        } else {
-            System.out.println("Formato de ordem inválido: " + orderMessage);
-        }
+        Order order = new Order(orderMessage.getSymbol(),
+                OrderType.valueOf(orderMessage.getOperation()),
+                orderMessage.getQuantity(),
+                orderMessage.getPrice());
+
+        matchingEngine.processOrder(order);
+
+        //RESPOSTA AO GATEWAY
+        String response = "Order processed: " + order;
+        strategy.sendRequest(new Request(response), sender);
+
     }
 
-    private Order parseOrder(String orderDetails) {
-        try {
-            StringTokenizer tokenizer = new StringTokenizer(orderDetails.trim(), ";");
-
-            if (tokenizer.countTokens() != 4) {
-                System.out.println("Formato de ordem inválido: " + orderDetails);
-                return null;
-            }
-
-            String type = tokenizer.nextToken().trim();
-            String symbol = tokenizer.nextToken().trim();
-            int quantity = Integer.parseInt(tokenizer.nextToken().trim());
-            double price = Double.parseDouble(tokenizer.nextToken().trim());
-
-            return new Order(symbol, OrderType.valueOf(type), quantity, price);
-        } catch (Exception e) {
-            System.out.println("Erro ao processar ordem: " + orderDetails);
-            return null;
-        }
-    }
     
     public static void main(String[] args) {
         if (args.length < 2) {
@@ -151,13 +144,13 @@ public class Server implements MessageHandler, OrderHandler, FailureListener, Le
         }
 
         MatchingEngine matchingEngine = new MatchingEngine(new OrderBookService());
-        
+
         Server server = new Server(matchingEngine, serverId, nodeAddresses, strategy);
 
         System.out.println("Servidor iniciado com protocolo: " + protocol.toUpperCase());
         System.out.println("ServerId: " + serverId);
         System.out.println("NodeAddresses: " + nodeAddresses);
-        
+
         server.start();
     }
 }

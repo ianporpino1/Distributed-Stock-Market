@@ -52,7 +52,7 @@ public class ElectionManager {
 
         for (int otherNodeId : nodeAddresses.keySet()) {
             Message requestVote = new Message(MessageType.REQUEST_VOTE, state.getCurrentGeneration(), serverId, -1);
-            strategy.sendMessage(requestVote, nodeAddresses.get(otherNodeId));
+            strategy.sendRequest(new Request(requestVote), nodeAddresses.get(otherNodeId));
         }
         waitForVotes();
     }
@@ -82,7 +82,7 @@ public class ElectionManager {
                 System.out.println(serverId + " votou para " + message.getSenderId() + " na geração " + state.getCurrentGeneration() + ".");
 
                 Message vote = new Message(MessageType.VOTE, state.getCurrentGeneration(), serverId, -1);
-                strategy.sendMessage(vote, nodeAddresses.get(message.getSenderId()));
+                strategy.sendRequest(new Request(vote), nodeAddresses.get(message.getSenderId()));
             }
         }
     }

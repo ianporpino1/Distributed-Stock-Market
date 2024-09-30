@@ -1,12 +1,20 @@
 package com.patterns;
 
-public class OrderMessage {
+import java.io.Serializable;
+
+public class OrderMessage implements Serializable {
     private String operation;
     private String symbol;
     private int quantity;
     private double price;
-    
-    
+
+    public OrderMessage(String orderType, String stockSymbol, int quantity, double price) {
+        this.operation = orderType;
+        this.symbol = stockSymbol;
+        this.quantity = quantity;
+        this.price = price;
+    }
+
 
     public String getOperation() {
         return operation;

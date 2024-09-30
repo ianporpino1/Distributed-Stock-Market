@@ -7,10 +7,11 @@ import com.server.MessageHandler;
 import com.server.OrderHandler;
 
 import java.io.*;
-import java.net.*;
-
-import java.io.*;
-import java.net.*;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 
 public class TcpCommunicationStrategy implements CommunicationStrategy {
     private ServerSocket serverSocket;
@@ -19,56 +20,64 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
     public void sendRequest(Request request, InetSocketAddress recipient) {
         try (Socket socket = new Socket(recipient.getAddress(), recipient.getPort());
              ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream())) {
-
             out.writeObject(request);
             out.flush();
         } catch (IOException e) {
-            System.err.println("Erro ao enviar mensagem: " + e.getMessage());
+            System.err.println("Erro ao enviar requisição: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
     @Override
-    public void startListening(int port, MessageHandler messageHandler, OrderHandler orderHandler) {
+    public void startListening(int port, MessageHandler handler, OrderHandler orderHandler) {
         try {
             serverSocket = new ServerSocket(port);
             System.out.println("TCP Server listening on port " + port);
 
-            new Thread(() -> {
-                while (!serverSocket.isClosed()) {
-                    try {
-                        Socket clientSocket = serverSocket.accept();
-                        new Thread(() -> handleClientConnection(clientSocket, messageHandler, orderHandler)).start();
-                    } catch (IOException e) {
-                        if (!serverSocket.isClosed()) {
-                            e.printStackTrace();
-                        }
+            while (!serverSocket.isClosed()) {
+                try {
+                    Socket clientSocket = serverSocket.accept();
+                    new Thread(() -> handleClientConnection(clientSocket, handler, orderHandler)).start();
+                } catch (IOException e) {
+                    if (!serverSocket.isClosed()) {
+                        System.err.println("Erro ao aceitar conexão: " + e.getMessage());
+                        e.printStackTrace();
                     }
                 }
-            }).start();
+            }
         } catch (IOException e) {
+            System.err.println("Erro ao iniciar o servidor: " + e.getMessage());
             e.printStackTrace();
         }
     }
 
     private void handleClientConnection(Socket clientSocket, MessageHandler messageHandler, OrderHandler orderHandler) {
         try {
-            ObjectInputStream in = new ObjectInputStream(clientSocket.getInputStream());
-            InetSocketAddress remoteAddress = (InetSocketAddress) clientSocket.getRemoteSocketAddress();
+            InputStream inputStream = clientSocket.getInputStream();
+            BufferedInputStream bis = new BufferedInputStream(inputStream);
+            bis.mark(4);
 
-            // Deserialize the Request object
-            Request requestObject = (Request) in.readObject();
+            byte[] header = new byte[4];
+            bis.read(header, 0, 4);
+            bis.reset();
+            String headerString = new String(header);
 
-            // Process the Request based on its type
-            if (requestObject.getType() == Request.RequestType.ORDER) {
-                OrderMessage orderMessage = requestObject.getOrder();
-                orderHandler.handleOrder(orderMessage, remoteAddress);
-            } else if (requestObject.getType() == Request.RequestType.MESSAGE) {
-                Message message = requestObject.getMessage();
-                messageHandler.handleMessage(message, remoteAddress);
+            if (headerString.equals("ORDE")) {
+                BufferedReader reader = new BufferedReader(new InputStreamReader(bis));
+                String receivedString = reader.readLine();
+                InetSocketAddress remoteAddress = (InetSocketAddress) clientSocket.getRemoteSocketAddress();
+
+
+                if (receivedString.startsWith("ORDER:")) {
+                    orderHandler.handleOrder(parseOrderRequest(receivedString).getOrder(), remoteAddress);
+                }
             } else {
-                System.err.println("Tipo de requisição não suportado: " + requestObject.getType());
-            }
+                ObjectInputStream in = new ObjectInputStream(bis);
+                Request request = (Request) in.readObject();
+                InetSocketAddress remoteAddress = (InetSocketAddress) clientSocket.getRemoteSocketAddress();
 
+                processRequest(request,messageHandler,orderHandler,remoteAddress);
+            }
         } catch (EOFException e) {
             System.err.println("Conexão fechada pelo cliente.");
         } catch (IOException | ClassNotFoundException e) {
@@ -79,6 +88,53 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
             } catch (IOException e) {
                 System.err.println("Erro ao fechar o socket do cliente: " + e.getMessage());
             }
+        }
+    }
+
+
+    private Request parseOrderRequest(String requestString) {
+        String[] parts = requestString.split(":", 2);
+        if (parts.length != 2) {
+            System.out.println("Formato de ordem inválido: " + requestString);
+            return null;
+        }
+
+        String[] orderDetails = parts[1].split(";");
+        if (orderDetails.length != 4) {
+            System.out.println("Formato de ordem inválido: " + Arrays.toString(orderDetails));
+            return null;
+        }
+
+        String type = orderDetails[0].trim();
+        String symbol = orderDetails[1].trim();
+        int quantity;
+        double price;
+
+        try {
+            quantity = Integer.parseInt(orderDetails[2].trim());
+            price = Double.parseDouble(orderDetails[3].trim());
+        } catch (NumberFormatException e) {
+            System.out.println("Erro ao analisar quantidade ou preço: " + e.getMessage());
+            return null;
+        }
+
+        return new Request(new OrderMessage(type, symbol, quantity, price));
+    }
+
+
+    private void processRequest(Request request, MessageHandler handler, OrderHandler orderHandler, InetSocketAddress sender) {
+        switch (request.getType()) {
+            case MESSAGE:
+                handler.handleMessage(request.getMessage(), sender);
+                break;
+            case ORDER:
+                orderHandler.handleOrder(request.getOrder(), sender);
+                break;
+            case RESPONSE:
+                System.out.println("Resposta recebida: " + request.getResponseContent());
+                break;
+            default:
+                System.err.println("Tipo de requisição desconhecido: " + request.getType());
         }
     }
 }

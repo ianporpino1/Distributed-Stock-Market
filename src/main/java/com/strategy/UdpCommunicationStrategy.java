@@ -1,5 +1,6 @@
 package com.strategy;
 
+import com.patterns.OrderMessage;
 import com.patterns.Request;
 import com.server.MessageHandler;
 import com.server.OrderHandler;
@@ -8,12 +9,8 @@ import java.io.*;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
-
-
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.net.SocketException;
+import java.util.Arrays;
 
 
 public class UdpCommunicationStrategy implements CommunicationStrategy {
@@ -22,12 +19,9 @@ public class UdpCommunicationStrategy implements CommunicationStrategy {
     @Override
     public void sendRequest(Request request, InetSocketAddress recipient) {
         try {
-            
-
             byte[] buffer = serializeRequest(request);
             DatagramPacket packet = new DatagramPacket(buffer, buffer.length, recipient);
             socket.send(packet);
-            
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -45,50 +39,80 @@ public class UdpCommunicationStrategy implements CommunicationStrategy {
                     DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
                     try {
                         socket.receive(packet);
-                        
-                        Request request = deserializeRequest(packet.getData());
-
+                        Request request = deserializeRequest(packet.getData(), packet.getLength());
                         processRequest(request, handler, orderHandler, (InetSocketAddress) packet.getSocketAddress());
                     } catch (IOException | ClassNotFoundException e) {
-                        throw new RuntimeException(e);
+                        e.printStackTrace();
                     }
-
-
                 }
             }).start();
-
         } catch (SocketException e) {
             throw new RuntimeException(e);
         }
     }
 
-        private byte[] serializeRequest (Request request) throws IOException {
-            try (ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
-                 ObjectOutputStream out = new ObjectOutputStream(byteOut)) {
-                out.writeObject(request);
-                return byteOut.toByteArray();
-            }
-        }
-
-        private Request deserializeRequest ( byte[] data) throws IOException, ClassNotFoundException {
-            try (ByteArrayInputStream byteIn = new ByteArrayInputStream(data);
-                 ObjectInputStream in = new ObjectInputStream(byteIn)) {
-                return (Request) in.readObject();
-            }
-        }
-
-        private void processRequest (Request request, MessageHandler handler, OrderHandler
-        orderHandler, InetSocketAddress sender){
-            switch (request.getType()) {
-                case MESSAGE:
-                    handler.handleMessage(request.getMessage(), sender);
-                    break;
-                case ORDER:
-                    orderHandler.handleOrder(request.getOrder(), sender);
-                    break;
-                case RESPONSE:
-                    // Implementar o que fazer com uma resposta, se necessário
-                    break;
-            }
+    private byte[] serializeRequest(Request request) throws IOException {
+        try (ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+             ObjectOutputStream out = new ObjectOutputStream(byteOut)) {
+            out.writeObject(request);
+            return byteOut.toByteArray();
         }
     }
+
+    private Request deserializeRequest(byte[] data, int length) throws IOException, ClassNotFoundException {
+        String requestString = new String(data, 0, length).trim();
+
+        if (requestString.startsWith("ORDER:")) {
+            return parseOrderRequest(requestString);
+        }
+
+        try (ByteArrayInputStream byteIn = new ByteArrayInputStream(data, 0, length);
+             ObjectInputStream in = new ObjectInputStream(byteIn)) {
+            return (Request) in.readObject();
+        }
+    }
+
+    private Request parseOrderRequest(String requestString) {
+        String[] parts = requestString.split(":", 2);
+        if (parts.length != 2) {
+            System.out.println("Formato de ordem inválido: " + requestString);
+            return null;
+        }
+
+        String[] orderDetails = parts[1].split(";");
+        if (orderDetails.length != 4) {
+            System.out.println("Formato de ordem inválido: " + Arrays.toString(orderDetails));
+            return null;
+        }
+
+        String type = orderDetails[0].trim();
+        String symbol = orderDetails[1].trim();
+        int quantity;
+        double price;
+
+        try {
+            quantity = Integer.parseInt(orderDetails[2].trim());
+            price = Double.parseDouble(orderDetails[3].trim());
+        } catch (NumberFormatException e) {
+            System.out.println("Erro ao analisar quantidade ou preço: " + e.getMessage());
+            return null;
+        }
+
+        return new Request(new OrderMessage(type, symbol, quantity, price));
+    }
+    
+
+    private void processRequest(Request request, MessageHandler handler, OrderHandler orderHandler, InetSocketAddress sender) {
+        switch (request.getType()) {
+            case MESSAGE:
+                handler.handleMessage(request.getMessage(), sender);
+                break;
+            case ORDER:
+                orderHandler.handleOrder(request.getOrder(), sender);
+                break;
+            case RESPONSE:
+                // Implementar o que fazer com uma resposta, se necessário
+                break;
+        }
+    }
+}

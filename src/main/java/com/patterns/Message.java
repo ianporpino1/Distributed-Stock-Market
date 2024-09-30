@@ -19,6 +19,10 @@ public class Message implements Serializable {
         this.leaderId = leaderId;
     }
 
+    public Message() {
+        
+    }
+
     public MessageType getType() {
         return type;
     }

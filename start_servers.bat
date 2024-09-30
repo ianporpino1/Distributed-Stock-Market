@@ -31,3 +31,7 @@ echo Servidor 2 iniciado com ID %SERVER_2_ID% e nós: %SERVER_2_NODES%
 :: Inicia o terceiro servidor
 start cmd /k "java -cp target/classes com.server.Server %PROTOCOL% %SERVER_3_ID% %SERVER_3_NODES%"
 echo Servidor 3 iniciado com ID %SERVER_3_ID% e nós: %SERVER_3_NODES%
+
+:: Inicia o gateway
+start cmd /k "java -cp target/classes com.gateway.ApiGateway %PROTOCOL% %SERVER_1_ID% %SERVER_2_ID% %SERVER_3_ID%"
+echo Gateway iniciado com protocolo %PROTOCOL%

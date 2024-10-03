@@ -8,8 +8,10 @@ import java.net.InetSocketAddress;
 
 public class HttpCommunicationStrategy implements CommunicationStrategy {
 
+
+
     @Override
-    public void sendMessage(Message message, InetSocketAddress recipient) {
+    public void sendMessage(com.message.Message message, int nodeId) {
         
     }
 

@@ -1,6 +1,8 @@
 package com.server;
 
-import com.patterns.Message;
+
+
+import com.message.Message;
 
 import java.net.InetSocketAddress;
 

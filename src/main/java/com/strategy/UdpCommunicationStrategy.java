@@ -1,7 +1,7 @@
 package com.strategy;
 
-import com.patterns.Message;
-import com.patterns.MessageType;
+
+import com.message.Message;
 import com.server.MessageHandler;
 import com.server.OrderHandler;
 
@@ -15,19 +15,10 @@ import java.nio.charset.StandardCharsets;
 public class UdpCommunicationStrategy implements CommunicationStrategy {
     private DatagramSocket socket;
 
-    @Override
-    public void sendMessage(Message message, InetSocketAddress recipient) {
-        try {
-            ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
-            ObjectOutputStream out = new ObjectOutputStream(byteOut);
-            out.writeObject(message);
-            byte[] data = byteOut.toByteArray();
 
-            DatagramPacket packet = new DatagramPacket(data, data.length, recipient.getAddress(), recipient.getPort());
-            socket.send(packet);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+    @Override
+    public void sendMessage(Message message, int nodeId) {
+        
     }
 
     @Override

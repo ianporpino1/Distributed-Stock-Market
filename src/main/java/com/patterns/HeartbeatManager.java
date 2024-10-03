@@ -1,5 +1,6 @@
 package com.patterns;
 
+import com.message.HeartbeatMessage;
 import com.server.FailureListener;
 import com.server.ServerState;
 import com.strategy.CommunicationStrategy;
@@ -8,15 +9,17 @@ import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.*;
 
 public class HeartbeatManager {
     private final int serverId;
 
-    private final Map<Integer, InetSocketAddress> nodeAddresses;
+    private final Set<Integer> nodeAddresses;
+    public final Set<Integer> failedServers = ConcurrentHashMap.newKeySet();
     private CommunicationStrategy strategy;
-    private ScheduledExecutorService heartbeatChecker = Executors.newScheduledThreadPool(1); //provavelmente tera de ser 2 threads
-    private Map<Integer, Long> lastHeartbeatReceivedTimes = new ConcurrentHashMap<>();// uma para enviar heartbeats para o gateway e outra p receber
+    private ScheduledExecutorService heartbeatScheduler = Executors.newScheduledThreadPool(2); //provavelmente tera de ser 2 threads
+    public Map<Integer, Long> lastHeartbeatReceivedTimes = new ConcurrentHashMap<>();// uma para enviar heartbeats para o gateway e outra p receber
     public int heartbeatInterval = 2000;                                              // heartbeats do lider
     
     private ScheduledFuture<?> heartbeatTask;
@@ -24,25 +27,20 @@ public class HeartbeatManager {
     private final List<FailureListener> listeners = new ArrayList<FailureListener>();
 
 
-    private final ServerState serverState;
+    
 
-    public HeartbeatManager(int serverId, Map<Integer, InetSocketAddress> nodeAddresses,
-                            CommunicationStrategy strategy, ServerState serverState) {
+    public HeartbeatManager(int serverId, Set<Integer> nodeAddresses,
+                            CommunicationStrategy strategy) {
         this.serverId = serverId;
         this.nodeAddresses = nodeAddresses;
         this.strategy = strategy;
-        this.serverState = serverState;
 
         startHeartbeatChecker();
     }
 
-    public void startSendingHeartbeats() {
-        heartbeatTask = heartbeatChecker.scheduleAtFixedRate(
-                this::sendHeartbeats,
-                0,
-                heartbeatInterval,
-                TimeUnit.MILLISECONDS
-        );
+    public void startSendingHeartbeats(HeartbeatMessage heartbeat) {
+        heartbeatTask = heartbeatScheduler.scheduleAtFixedRate(() -> sendHeartbeats(heartbeat),
+                0, heartbeatInterval, TimeUnit.MILLISECONDS);
     }
 
     public void stopSendingHeartbeats() {
@@ -51,22 +49,11 @@ public class HeartbeatManager {
         }
     }
 
-    private void sendHeartbeats() { //provalvelmente vai ser modificado
-        if (serverState.getServerRole() == ServerRole.LEADER) {
-            nodeAddresses.forEach((otherNodeId, address) -> {
-                Message heartbeat = new Message(
-                        MessageType.HEARTBEAT,
-                        serverState.getCurrentGeneration(),
-                        serverId,
-                        serverId
-                );
-                System.out.println(heartbeat + " para: " + otherNodeId);
-                strategy.sendMessage(heartbeat, address);
-            });
-        }
-        else{
-            stopSendingHeartbeats();
-        }
+    private void sendHeartbeats(HeartbeatMessage heartbeat) {
+        nodeAddresses.forEach(nodeId -> {
+            System.out.println(heartbeat + " para: " + nodeId);
+            strategy.sendMessage(heartbeat, nodeId);
+        });
     }
 
 
@@ -75,7 +62,7 @@ public class HeartbeatManager {
     }
 
     private void startHeartbeatChecker() {
-        heartbeatChecker.scheduleWithFixedDelay(this::checkHeartbeatTimeouts,
+        heartbeatScheduler.scheduleWithFixedDelay(this::checkHeartbeatTimeouts,
                 heartbeatInterval, heartbeatInterval, TimeUnit.MILLISECONDS);
     }
 
@@ -83,15 +70,20 @@ public class HeartbeatManager {
     private void checkHeartbeatTimeouts() {
         long now = System.currentTimeMillis();
         for (Map.Entry<Integer, Long> entry : lastHeartbeatReceivedTimes.entrySet()) {
+            int nodeId = entry.getKey();
             long timeSinceLastHeartbeat = now - entry.getValue();
             long timeoutThreshold = 4000;
-            if (timeSinceLastHeartbeat >= timeoutThreshold) {
-                System.out.println("Servidor " + entry.getKey() + " considerado falho.");
 
-                notifyNodeFailure(entry.getKey());
+            if (failedServers.contains(nodeId)) {
+                continue;
+            }
+
+            if (timeSinceLastHeartbeat >= timeoutThreshold) {
+                System.out.println("Servidor " + nodeId + " considerado falho.");
+                notifyNodeFailure(nodeId);
+                failedServers.add(nodeId);
             }
         }
-
     }
 
     private void notifyNodeFailure(int failedId) {
@@ -100,17 +92,5 @@ public class HeartbeatManager {
         }
     }
     
-    //talvez add listener onLeaderDetected, talvez nem precise, pq quem chama esse metodo eh o server
-    public void handleHeartbeat(Message message) {
-        if (message.getGeneration() >= serverState.getCurrentGeneration()) {
-            if (serverState.getServerRole() != ServerRole.FOLLOWER){
-                serverState.setServerRole(ServerRole.FOLLOWER);
-                System.out.println("Node " + serverId + " reconhece o líder " + message.getLeaderId() + " no termo " + serverState.getCurrentGeneration());
-            } 
-            serverState.setLeaderId(message.getLeaderId());
-            serverState.setCurrentGeneration(message.getGeneration());
-            lastHeartbeatReceivedTimes.put(message.getSenderId(), System.currentTimeMillis());
-        }
-    }
 
 }

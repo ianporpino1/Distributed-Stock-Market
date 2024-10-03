@@ -1,8 +1,15 @@
 package com.server;
 
+import com.message.HeartbeatMessage;
+import com.message.Message;
+import com.message.RequestVoteMessage;
+import com.message.VoteResponseMessage;
 import com.model.Order;
 import com.model.OrderType;
-import com.patterns.*;
+
+import com.patterns.ElectionManager;
+import com.patterns.HeartbeatManager;
+import com.patterns.ServerRole;
 import com.service.MatchingEngine;
 import com.service.OrderBookService;
 import com.strategy.CommunicationStrategy;
@@ -11,15 +18,14 @@ import com.strategy.TcpCommunicationStrategy;
 import com.strategy.UdpCommunicationStrategy;
 
 import java.awt.image.ImageConsumer;
+import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.StringTokenizer;
+import java.util.*;
 
 public class Server implements MessageHandler, OrderHandler, FailureListener, LeaderElectedListener {
     private final MatchingEngine matchingEngine;
     private final int serverId;
-    private final Map<Integer, InetSocketAddress> nodeAddresses;
+    private final Set<Integer> nodeAddresses;
     private final CommunicationStrategy strategy;
     private final ElectionManager electionManager;
     private final HeartbeatManager heartbeatManager;
@@ -30,7 +36,7 @@ public class Server implements MessageHandler, OrderHandler, FailureListener, Le
     private static final int PORT = 9001;
 
     public Server(MatchingEngine matchingEngine, int serverId,
-                  Map<Integer, InetSocketAddress> nodeAddresses,
+                  Set<Integer> nodeAddresses,
                   CommunicationStrategy strategy) {
         this.matchingEngine = matchingEngine;
         this.serverId = serverId;
@@ -38,7 +44,7 @@ public class Server implements MessageHandler, OrderHandler, FailureListener, Le
         this.strategy = strategy;
         this.serverState = new ServerState();
         
-        this.heartbeatManager = new HeartbeatManager(serverId, nodeAddresses, strategy, serverState);
+        this.heartbeatManager = new HeartbeatManager(serverId, nodeAddresses, strategy);
         
         this.electionManager = new ElectionManager(serverId, nodeAddresses, strategy, serverState);
         
@@ -48,7 +54,13 @@ public class Server implements MessageHandler, OrderHandler, FailureListener, Le
     }
 
     public void start() {
-        new Thread(() -> strategy.startListening(serverId + PORT, this, this)).start();
+        new Thread(() -> {
+            try {
+                strategy.startListening(serverId + PORT, this, this);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }).start();
         
         electionManager.startElectionTimeout();
     }
@@ -60,26 +72,35 @@ public class Server implements MessageHandler, OrderHandler, FailureListener, Le
         }
     }
     @Override
-    public void onLeaderElected(){
-        heartbeatManager.startSendingHeartbeats();
+    public void onLeaderElected() {
+        HeartbeatMessage heartbeat = new HeartbeatMessage(serverState.getCurrentGeneration(), serverId, serverId);
+        heartbeatManager.startSendingHeartbeats(heartbeat);
     }
 
     public void handleMessage(Message message, InetSocketAddress sender) {
-        switch (message.getType()) {
-            case REQUEST_VOTE:
-                System.out.println("Received request vote from " + message.getSenderId());
-                electionManager.handleVoteRequest(message);
-                break;
-            case VOTE:
-                System.out.println("Received vote from " + message.getSenderId());
-                electionManager.handleVoteResponse(message);
-                break;
-            case HEARTBEAT:
-                System.out.println("Received heartbeat from " + message.getSenderId());
-                heartbeatManager.handleHeartbeat(message);
-                break;
-            default:
-                System.out.println("Tipo de mensagem desconhecido: " + message.getType());
+        if (message instanceof RequestVoteMessage) {
+            electionManager.handleRequestVote((RequestVoteMessage) message);
+        } else if (message instanceof VoteResponseMessage) {
+            electionManager.handleVoteResponse((VoteResponseMessage) message);
+        }
+        else if (message instanceof HeartbeatMessage) {
+            handleHeartbeat((HeartbeatMessage) message);
+        }
+        else {
+            System.out.println("Mensagem desconhecida recebida.");
+        }
+    }
+
+    public void handleHeartbeat(HeartbeatMessage message) {
+        if (message.getGeneration() >= serverState.getCurrentGeneration()) {
+            if (serverState.getServerRole() != ServerRole.FOLLOWER) {
+                serverState.setServerRole(ServerRole.FOLLOWER);
+                System.out.println("Node " + serverId + " reconhece o líder " + message.getLeaderId() + " no termo " + serverState.getCurrentGeneration());
+            }
+            serverState.setLeaderId(message.getLeaderId());
+            serverState.setCurrentGeneration(message.getGeneration());
+            heartbeatManager.lastHeartbeatReceivedTimes.put(message.getSenderId(), System.currentTimeMillis());
+            heartbeatManager.failedServers.remove(serverId);
         }
     }
     
@@ -92,9 +113,9 @@ public class Server implements MessageHandler, OrderHandler, FailureListener, Le
             if (order != null) {
                 matchingEngine.processOrder(order);
                 
-                //RESPOSTA AO GATEWAY
-                String response = "Order processed: " + order;
-                strategy.sendMessage(new Response(MessageType.RESPONSE, response), sender);
+//                //RESPOSTA AO GATEWAY
+//                String response = "Order processed: " + order;
+//                strategy.sendMessage(new Response(MessageType.RESPONSE, response), sender);
             }
         } else {
             System.out.println("Formato de ordem inválido: " + orderMessage);
@@ -131,21 +152,31 @@ public class Server implements MessageHandler, OrderHandler, FailureListener, Le
         String protocol = args[0].toLowerCase();
         int serverId = Integer.parseInt(args[1]);
 
-        Map<Integer, InetSocketAddress> nodeAddresses = new HashMap<>();
+        Set<Integer> nodeAddresses = new HashSet<>();
+
+        for (int i = 1; i < args.length; i++) {
+            int nodeId = Integer.parseInt(args[i]);
+            if (nodeId != serverId) {
+                nodeAddresses.add(nodeId);
+            }
+        }
+
+        Map<Integer, InetSocketAddress> serverAddresses = new HashMap<>();
 
         for (int i = 1; i < args.length; i++) {
             int nodeId = Integer.parseInt(args[i]);
             if (nodeId != serverId) {
                 int port = nodeId + PORT;
-                nodeAddresses.put(nodeId, new InetSocketAddress("localhost", port));
+                serverAddresses.put(nodeId, new InetSocketAddress("localhost", port));
             }
         }
 
         CommunicationStrategy strategy = null;
+        
 
         switch (protocol) {
             case "udp" -> strategy = new UdpCommunicationStrategy();
-            case "tcp" -> strategy = new TcpCommunicationStrategy();
+            case "tcp" -> strategy = new TcpCommunicationStrategy(serverAddresses);
             case "http" -> strategy = new HttpCommunicationStrategy();
             default -> System.out.println("Protocolo não suportado.");
         }

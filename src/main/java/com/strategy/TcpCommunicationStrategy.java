@@ -1,95 +1,95 @@
 package com.strategy;
 
-import com.patterns.Message;
-import com.patterns.OrderMessage;
+import com.message.Message;
 import com.server.MessageHandler;
 import com.server.OrderHandler;
 
 import java.io.*;
 import java.net.*;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class TcpCommunicationStrategy implements CommunicationStrategy {
+    private final Map<Integer, InetSocketAddress> serverAddresses;
+    private final ExecutorService executorService;
+    private MessageHandler messageHandler;
     private ServerSocket serverSocket;
+    private final Map<Integer, ClientConnection> connections;
 
-    @Override
-    public void sendMessage(Message message, InetSocketAddress recipient) {
-        try (Socket socket = new Socket(recipient.getAddress(), recipient.getPort());
-             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream())) {
-
-            out.writeObject(message);
-            out.flush();
-        } catch (IOException e) {
-            System.err.println("Erro ao enviar mensagem: " + e.getMessage());
-        }
+    public TcpCommunicationStrategy(Map<Integer, InetSocketAddress> serverAddresses) {
+        this.serverAddresses = serverAddresses;
+        this.executorService = Executors.newCachedThreadPool();
+        this.connections = new ConcurrentHashMap<>();
     }
 
     @Override
-    public void startListening(int port, MessageHandler messageHandler, OrderHandler orderHandler) {
-        try {
-            serverSocket = new ServerSocket(port);
-            System.out.println("TCP Server listening on port " + port);
-
-            new Thread(() -> {
-                while (!serverSocket.isClosed()) {
-                    try {
-                        Socket clientSocket = serverSocket.accept();
-                        new Thread(() -> handleClientConnection(clientSocket, messageHandler, orderHandler)).start();
-                    } catch (IOException e) {
-                        if (!serverSocket.isClosed()) {
-                            e.printStackTrace();
-                        }
-                    }
-                }
-            }).start();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+    public void startListening(int port, MessageHandler messageHandler, OrderHandler orderHandler) throws IOException {
+        this.messageHandler = messageHandler;
+        serverSocket = new ServerSocket(port);
+        executorService.submit(this::acceptConnections);
     }
 
-
-    private void handleClientConnection(Socket clientSocket, MessageHandler messageHandler, OrderHandler orderHandler) {
-        try {
-            InputStream inputStream = clientSocket.getInputStream();
-            BufferedInputStream bis = new BufferedInputStream(inputStream);
-            bis.mark(4);
-
-            byte[] header = new byte[4];
-            bis.read(header, 0, 4);
-            bis.reset();
-
-            
-            String headerString = new String(header);
-
-            if (headerString.equals("ORDE")) {
-                BufferedReader reader = new BufferedReader(new InputStreamReader(bis));
-                String receivedString = reader.readLine();
-                InetSocketAddress remoteAddress = (InetSocketAddress) clientSocket.getRemoteSocketAddress();
-
-                if (receivedString.startsWith("ORDER")) {
-                    orderHandler.handleOrder(receivedString, remoteAddress);
-                }
-            } else {
-                ObjectInputStream in = new ObjectInputStream(bis);
-                Object receivedObject = in.readObject();
-                InetSocketAddress remoteAddress = (InetSocketAddress) clientSocket.getRemoteSocketAddress();
-
-                if (receivedObject instanceof Message message) {
-                    messageHandler.handleMessage(message, remoteAddress);
-                } else {
-                    System.err.println("Tipo de mensagem não suportado: " + receivedObject.getClass().getName());
-                }
-            }
-        } catch (EOFException e) {
-            System.err.println("Conexão fechada pelo cliente.");
-        } catch (IOException | ClassNotFoundException e) {
-            System.err.println("Erro ao processar a conexão: " + e.getMessage());
-        } finally {
+    private void acceptConnections() {
+        while (!Thread.currentThread().isInterrupted()) {
             try {
-                clientSocket.close();
+                Socket clientSocket = serverSocket.accept();
+                System.out.println("Accepted connection from " + clientSocket.getInetAddress().getHostAddress());
+                executorService.submit(() -> handleClientConnection(clientSocket));
             } catch (IOException e) {
-                System.err.println("Erro ao fechar o socket do cliente: " + e.getMessage());
+                System.err.println("Erro ao aceitar conexão: " + e.getMessage());
             }
         }
     }
 
+    private void handleClientConnection(Socket clientSocket) {
+        try {
+            ClientConnection connection = new ClientConnection(clientSocket);
+            connections.put(((InetSocketAddress) clientSocket.getRemoteSocketAddress()).getPort(), connection);
+
+            while (!Thread.currentThread().isInterrupted()) {
+                Message message = (Message) connection.getIn().readObject();
+                System.out.println("Recebida mensagem: " + message.getClass().getName());
+                messageHandler.handleMessage(message, (InetSocketAddress) clientSocket.getRemoteSocketAddress());
+            }
+        } catch (IOException | ClassNotFoundException e) {
+            System.err.println("Erro ao lidar com conexão do cliente: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public void sendMessage(Message message, int nodeId) {
+        executorService.submit(() -> {
+            try {
+                ClientConnection connection = getOrCreateConnection(nodeId);
+
+                if (connection.getSocket() != null && !connection.getSocket().isClosed()) {
+                    connection.getOut().writeObject(message);
+                    connection.getOut().flush();
+                    connection.getOut().reset(); // Reset para evitar referências antigas
+                    System.out.println("Mensagem enviada para " + nodeId + ": " + message);
+                } else {
+                    System.err.println("Socket para o servidor " + nodeId + " está fechado ou nulo.");
+                    connections.remove(nodeId);
+                }
+            } catch (IOException e) {
+                System.err.println("Erro ao obter conexão para o servidor " + nodeId + ": " + e.getMessage());
+                connections.remove(nodeId);
+            }
+        });
+    }
+
+    private ClientConnection getOrCreateConnection(int targetId) throws IOException {
+        return connections.computeIfAbsent(targetId, id -> {
+            try {
+                InetSocketAddress address = serverAddresses.get(id);
+                Socket socket = new Socket(address.getHostName(), address.getPort());
+                System.out.println("Conexão estabelecida com o servidor " + id + " em " + address.getPort());
+                return new ClientConnection(socket);
+            } catch (IOException e) {
+                throw new RuntimeException("Não foi possível conectar ao servidor " + id, e);
+            }
+        });
+    }
 }

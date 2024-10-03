@@ -1,35 +1,33 @@
 package com.patterns;
 
+import com.message.RequestVoteMessage;
+import com.message.VoteResponseMessage;
 import com.server.LeaderElectedListener;
 import com.server.ServerState;
 import com.strategy.CommunicationStrategy;
 
-import java.net.InetSocketAddress;
-import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 
+
+import java.util.Set;
+import java.util.Random;
 
 public class ElectionManager {
     private final int serverId;
     private final ServerState state;
-
-   
-    private final Map<Integer, InetSocketAddress> nodeAddresses;
-
+    private final Set<Integer> nodeAddresses;
     private final int electionTimeout = 5000;
     private final CommunicationStrategy strategy;
-
     private LeaderElectedListener listener;
 
-
-    public ElectionManager(int serverId, Map<Integer, InetSocketAddress> nodeAddresses, CommunicationStrategy strategy,
+    public ElectionManager(int serverId, Set<Integer> nodeAddresses, CommunicationStrategy strategy,
                            ServerState state) {
         this.serverId = serverId;
         this.state = state;
         this.nodeAddresses = nodeAddresses;
         this.strategy = strategy;
     }
-
 
     public void startElectionTimeout() {
         try {
@@ -38,7 +36,7 @@ public class ElectionManager {
                 startElection();
             }
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            Thread.currentThread().interrupt(); // Restore interrupted status
         }
     }
 
@@ -46,13 +44,16 @@ public class ElectionManager {
         state.incrementGeneration();
         System.out.println("Iniciando Election... Generation: " + state.getCurrentGeneration());
         state.setServerRole(ServerRole.CANDIDATE);
-        state.addVotedForAtGeneration(serverId,state.getCurrentGeneration());
-        
+        state.setVotes(0); // Reseta os votos para a nova eleição
+        state.voteFor(serverId, state.getCurrentGeneration());
+
         state.incrementVotes();
 
-        for (int otherNodeId : nodeAddresses.keySet()) {
-            Message requestVote = new Message(MessageType.REQUEST_VOTE, state.getCurrentGeneration(), serverId, -1);
-            strategy.sendMessage(requestVote, nodeAddresses.get(otherNodeId));
+        // Enviar pedido de voto para os outros servidores
+        RequestVoteMessage requestVoteMessage = new RequestVoteMessage(state.getCurrentGeneration(), serverId, -1);
+
+        for (int nodeId : nodeAddresses) {
+            strategy.sendMessage(requestVoteMessage, nodeId);
         }
         waitForVotes();
     }
@@ -63,40 +64,42 @@ public class ElectionManager {
             try {
                 Thread.sleep(100);
             } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+                Thread.currentThread().interrupt(); // Restore interrupted status
             }
         }
 
         if (state.getServerRole() == ServerRole.CANDIDATE && state.getVotes() <= (nodeAddresses.size() / 2)) {
             System.out.println("Nenhuma resposta de outros nós. Node " + serverId + " voltando a follower.");
-
-            startElection();
+            state.setServerRole(ServerRole.FOLLOWER); // Muda o papel do servidor para follower
         }
     }
 
-    public void handleVoteRequest(Message message) {
+    public void handleRequestVote(RequestVoteMessage message) {
+        boolean voteGranted = false;
         if (message.getGeneration() >= state.getCurrentGeneration()) {
             state.setCurrentGeneration(message.getGeneration());
-            if (state.getVotedForAtGeneration().getOrDefault(state.getCurrentGeneration(), -1) == -1) {
-                state.addVotedForAtGeneration(message.getSenderId(), state.getCurrentGeneration());
-                System.out.println(serverId + " votou para " + message.getSenderId() + " na geração " + state.getCurrentGeneration() + ".");
-
-                Message vote = new Message(MessageType.VOTE, state.getCurrentGeneration(), serverId, -1);
-                strategy.sendMessage(vote, nodeAddresses.get(message.getSenderId()));
+            // Verifica se este servidor já votou nesta geração
+            if (state.voteFor(message.getSenderId(), message.getGeneration())) {
+                System.out.println(serverId + " votou para " + message.getSenderId() + " na geração " + state.getCurrentGeneration());
+                voteGranted = true;
             }
         }
+        // Enviar resposta de voto
+        VoteResponseMessage response = new VoteResponseMessage(state.getCurrentGeneration(), voteGranted, serverId);
+        strategy.sendMessage(response, message.getSenderId());
     }
 
-
-    public void handleVoteResponse(Message message) {
-        synchronized (state){
+    public void handleVoteResponse(VoteResponseMessage message) {
+        synchronized (state) {
             if (state.getServerRole() == ServerRole.CANDIDATE && message.getGeneration() == state.getCurrentGeneration()) {
-                state.incrementVotes();
-                System.out.println("Node " + serverId + " recebeu um voto. Total: " + state.getVotes());
-                
-                if (state.getVotes() > (nodeAddresses.size() / 2)) {
-                    System.out.println("Node " + serverId + " se tornou o líder no termo " + state.getCurrentGeneration());
-                    becomeLeader();
+                if (message.isVoteGranted()) {
+                    state.incrementVotes();
+                    System.out.println("Node " + serverId + " recebeu um voto. Total: " + state.getVotes());
+
+                    if (state.getVotes() > (nodeAddresses.size() / 2)) {
+                        System.out.println("Node " + serverId + " se tornou o líder na geração " + state.getCurrentGeneration());
+                        becomeLeader();
+                    }
                 }
             }
         }
@@ -106,16 +109,12 @@ public class ElectionManager {
         state.setServerRole(ServerRole.LEADER);
         state.setLeaderId(serverId);
         state.setVotes(0);
-
-        listener.onLeaderElected();
+        if (listener != null) {
+            listener.onLeaderElected();
+        }
     }
-
-//    private void becomeFollower() {
-//        serverState.setServerRole(ServerRole.FOLLOWER);
-//    }
 
     public void addLeaderElectedListener(LeaderElectedListener listener) {
         this.listener = listener;
     }
 }
-

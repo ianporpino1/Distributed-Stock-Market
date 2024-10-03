@@ -1,6 +1,7 @@
 package com.strategy;
 
 import com.message.Message;
+import com.server.ClientConnection;
 import com.server.MessageHandler;
 import com.server.OrderHandler;
 
@@ -35,7 +36,6 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
         while (!Thread.currentThread().isInterrupted()) {
             try {
                 Socket clientSocket = serverSocket.accept();
-                System.out.println("Accepted connection from " + clientSocket.getInetAddress().getHostAddress());
                 executorService.submit(() -> handleClientConnection(clientSocket));
             } catch (IOException e) {
                 System.err.println("Erro ao aceitar conexão: " + e.getMessage());
@@ -50,7 +50,7 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
 
             while (!Thread.currentThread().isInterrupted()) {
                 Message message = (Message) connection.getIn().readObject();
-                System.out.println("Recebida mensagem: " + message.getClass().getName());
+                
                 messageHandler.handleMessage(message, (InetSocketAddress) clientSocket.getRemoteSocketAddress());
             }
         } catch (IOException | ClassNotFoundException e) {
@@ -67,8 +67,7 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
                 if (connection.getSocket() != null && !connection.getSocket().isClosed()) {
                     connection.getOut().writeObject(message);
                     connection.getOut().flush();
-                    connection.getOut().reset(); // Reset para evitar referências antigas
-                    System.out.println("Mensagem enviada para " + nodeId + ": " + message);
+                    connection.getOut().reset();
                 } else {
                     System.err.println("Socket para o servidor " + nodeId + " está fechado ou nulo.");
                     connections.remove(nodeId);

@@ -1,16 +1,5 @@
 package com.gateway;
 
-import com.patterns.HeartbeatManager;
-import com.patterns.Message;
-import com.server.FailureListener;
-import com.server.MessageHandler;
-import com.server.OrderHandler;
-import com.strategy.CommunicationStrategy;
-
-import java.io.IOException;
-import java.net.*;
-import java.util.Map;
-
 //public class ApiGateway implements FailureListener, MessageHandler, OrderHandler {
 //
 //    private static final String[] INSTANCES_IP = {"127.0.0.1", "127.0.0.1", "127.0.0.1"};

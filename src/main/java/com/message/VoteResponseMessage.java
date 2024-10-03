@@ -14,8 +14,7 @@ public class VoteResponseMessage implements Message, Serializable {
         this.voteGranted = voteGranted;
         this.senderId = senderId;
     }
-
-    @Override
+    
     public int getGeneration() {
         return generation;
     }

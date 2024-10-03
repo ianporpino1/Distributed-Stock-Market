@@ -78,16 +78,11 @@ public class Server implements MessageHandler, OrderHandler, FailureListener, Le
     }
 
     public void handleMessage(Message message, InetSocketAddress sender) {
-        if (message instanceof RequestVoteMessage) {
-            electionManager.handleRequestVote((RequestVoteMessage) message);
-        } else if (message instanceof VoteResponseMessage) {
-            electionManager.handleVoteResponse((VoteResponseMessage) message);
-        }
-        else if (message instanceof HeartbeatMessage) {
-            handleHeartbeat((HeartbeatMessage) message);
-        }
-        else {
-            System.out.println("Mensagem desconhecida recebida.");
+        switch (message) {
+            case RequestVoteMessage requestVoteMessage -> electionManager.handleRequestVote(requestVoteMessage);
+            case VoteResponseMessage voteResponseMessage -> electionManager.handleVoteResponse(voteResponseMessage);
+            case HeartbeatMessage heartbeatMessage -> handleHeartbeat(heartbeatMessage);
+            case null, default -> System.out.println("Mensagem desconhecida recebida.");
         }
     }
 
@@ -175,7 +170,7 @@ public class Server implements MessageHandler, OrderHandler, FailureListener, Le
         
 
         switch (protocol) {
-            case "udp" -> strategy = new UdpCommunicationStrategy();
+            case "udp" -> strategy = new UdpCommunicationStrategy(serverAddresses);
             case "tcp" -> strategy = new TcpCommunicationStrategy(serverAddresses);
             case "http" -> strategy = new HttpCommunicationStrategy();
             default -> System.out.println("Protocolo não suportado.");

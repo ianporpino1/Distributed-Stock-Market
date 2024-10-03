@@ -2,10 +2,8 @@ package com.patterns;
 
 import com.message.HeartbeatMessage;
 import com.server.FailureListener;
-import com.server.ServerState;
 import com.strategy.CommunicationStrategy;
 
-import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -24,9 +22,7 @@ public class HeartbeatManager {
     
     private ScheduledFuture<?> heartbeatTask;
 
-    private final List<FailureListener> listeners = new ArrayList<FailureListener>();
-
-
+    private final List<FailureListener> listeners = new ArrayList<>();
     
 
     public HeartbeatManager(int serverId, Set<Integer> nodeAddresses,

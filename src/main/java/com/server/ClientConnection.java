@@ -1,4 +1,4 @@
-package com.strategy;
+package com.server;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;

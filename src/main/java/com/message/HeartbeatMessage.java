@@ -22,8 +22,7 @@ public class HeartbeatMessage implements Message, Serializable {
     public int getSenderId() {
         return senderId;
     }
-
-    @Override
+    
     public int getGeneration() {
         return generation;
     }

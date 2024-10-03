@@ -4,5 +4,4 @@ import java.io.Serializable;
 
 public interface Message {
     int getSenderId();
-    int getGeneration();
 }

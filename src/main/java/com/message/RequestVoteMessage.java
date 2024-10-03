@@ -20,7 +20,7 @@ public class RequestVoteMessage implements Serializable, Message {
         return candidateId;
     }
 
-    @Override
+    
     public int getGeneration() {
         return generation;
     }

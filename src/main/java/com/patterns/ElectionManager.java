@@ -9,10 +9,6 @@ import com.strategy.CommunicationStrategy;
 import java.util.Random;
 import java.util.Set;
 
-
-import java.util.Set;
-import java.util.Random;
-
 public class ElectionManager {
     private final int serverId;
     private final ServerState state;
@@ -36,7 +32,7 @@ public class ElectionManager {
                 startElection();
             }
         } catch (InterruptedException e) {
-            Thread.currentThread().interrupt(); // Restore interrupted status
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -44,12 +40,11 @@ public class ElectionManager {
         state.incrementGeneration();
         System.out.println("Iniciando Election... Generation: " + state.getCurrentGeneration());
         state.setServerRole(ServerRole.CANDIDATE);
-        state.setVotes(0); // Reseta os votos para a nova eleição
+        state.setVotes(0);
         state.voteFor(serverId, state.getCurrentGeneration());
 
         state.incrementVotes();
-
-        // Enviar pedido de voto para os outros servidores
+        
         RequestVoteMessage requestVoteMessage = new RequestVoteMessage(state.getCurrentGeneration(), serverId, -1);
 
         for (int nodeId : nodeAddresses) {
@@ -64,13 +59,13 @@ public class ElectionManager {
             try {
                 Thread.sleep(100);
             } catch (InterruptedException e) {
-                Thread.currentThread().interrupt(); // Restore interrupted status
+                Thread.currentThread().interrupt();
             }
         }
 
         if (state.getServerRole() == ServerRole.CANDIDATE && state.getVotes() <= (nodeAddresses.size() / 2)) {
             System.out.println("Nenhuma resposta de outros nós. Node " + serverId + " voltando a follower.");
-            state.setServerRole(ServerRole.FOLLOWER); // Muda o papel do servidor para follower
+            state.setServerRole(ServerRole.FOLLOWER);
         }
     }
 
@@ -78,13 +73,11 @@ public class ElectionManager {
         boolean voteGranted = false;
         if (message.getGeneration() >= state.getCurrentGeneration()) {
             state.setCurrentGeneration(message.getGeneration());
-            // Verifica se este servidor já votou nesta geração
             if (state.voteFor(message.getSenderId(), message.getGeneration())) {
                 System.out.println(serverId + " votou para " + message.getSenderId() + " na geração " + state.getCurrentGeneration());
                 voteGranted = true;
             }
         }
-        // Enviar resposta de voto
         VoteResponseMessage response = new VoteResponseMessage(state.getCurrentGeneration(), voteGranted, serverId);
         strategy.sendMessage(response, message.getSenderId());
     }

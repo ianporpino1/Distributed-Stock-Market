@@ -46,7 +46,7 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
     private void handleClientConnection(Socket clientSocket) {
         try {
             ClientConnection connection = new ClientConnection(clientSocket);
-            connections.put(((InetSocketAddress) clientSocket.getRemoteSocketAddress()).getPort(), connection);
+            connections.putIfAbsent(((InetSocketAddress) clientSocket.getRemoteSocketAddress()).getPort(), connection);
 
             while (!Thread.currentThread().isInterrupted()) {
                 Message message = (Message) connection.getIn().readObject();

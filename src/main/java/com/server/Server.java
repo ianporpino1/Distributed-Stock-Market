@@ -92,6 +92,7 @@ public class Server implements MessageHandler, OrderHandler, FailureListener, Le
                 serverState.setServerRole(ServerRole.FOLLOWER);
                 System.out.println("Node " + serverId + " reconhece o líder " + message.getLeaderId() + " no termo " + serverState.getCurrentGeneration());
             }
+            System.out.println("Recebeu heartbeat de " + message.getLeaderId());
             serverState.setLeaderId(message.getLeaderId());
             serverState.setCurrentGeneration(message.getGeneration());
             heartbeatManager.lastHeartbeatReceivedTimes.put(message.getSenderId(), System.currentTimeMillis());
@@ -172,7 +173,7 @@ public class Server implements MessageHandler, OrderHandler, FailureListener, Le
         switch (protocol) {
             case "udp" -> strategy = new UdpCommunicationStrategy(serverAddresses);
             case "tcp" -> strategy = new TcpCommunicationStrategy(serverAddresses);
-            case "http" -> strategy = new HttpCommunicationStrategy();
+            case "http" -> strategy = new HttpCommunicationStrategy(serverAddresses);
             default -> System.out.println("Protocolo não suportado.");
         }
 

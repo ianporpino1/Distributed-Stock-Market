@@ -2,6 +2,8 @@ package com.strategy;
 
 
 import com.message.Message;
+import com.message.OrderRequest;
+import com.message.OrderResponse;
 import com.server.MessageHandler;
 import com.server.OrderHandler;
 
@@ -34,6 +36,11 @@ public class UdpCommunicationStrategy implements CommunicationStrategy {
         socket = new DatagramSocket(port);
         System.out.println("UDP socket listening on port " + port);
         executorService.submit(this::receiveMessages);
+    }
+
+    @Override
+    public OrderResponse forwardOrder(OrderRequest orderRequest, InetSocketAddress clientAddress, int serverId) {
+        return null;
     }
 
     private void receiveMessages() {

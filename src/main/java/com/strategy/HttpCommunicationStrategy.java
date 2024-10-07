@@ -1,6 +1,8 @@
 package com.strategy;
 
 import com.message.Message;
+import com.message.OrderRequest;
+import com.message.OrderResponse;
 import com.server.ClientConnection;
 import com.server.MessageHandler;
 import com.server.OrderHandler;
@@ -33,6 +35,11 @@ public class HttpCommunicationStrategy implements CommunicationStrategy {
         this.messageHandler = messageHandler;
         serverSocket = new ServerSocket(port);
         executorService.submit(this::acceptConnections);
+    }
+
+    @Override
+    public OrderResponse forwardOrder(OrderRequest orderRequest, InetSocketAddress clientAddress, int serverId) {
+        return null;
     }
 
     private void acceptConnections() {

@@ -1,6 +1,8 @@
 package com.strategy;
 
 import com.message.Message;
+import com.message.OrderRequest;
+import com.message.OrderResponse;
 import com.server.ClientConnection;
 import com.server.MessageHandler;
 import com.server.OrderHandler;
@@ -16,6 +18,7 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
     private final Map<Integer, InetSocketAddress> serverAddresses;
     private final ExecutorService executorService;
     private MessageHandler messageHandler;
+    private OrderHandler orderHandler;
     private ServerSocket serverSocket;
     private final Map<Integer, ClientConnection> connections;
 
@@ -28,8 +31,14 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
     @Override
     public void startListening(int port, MessageHandler messageHandler, OrderHandler orderHandler) throws IOException {
         this.messageHandler = messageHandler;
+        this.orderHandler = orderHandler;
         serverSocket = new ServerSocket(port);
         executorService.submit(this::acceptConnections);
+    }
+
+    @Override
+    public OrderResponse forwardOrder(OrderRequest orderRequest, InetSocketAddress clientAddress, int serverId) {
+        return null;
     }
 
     private void acceptConnections() {

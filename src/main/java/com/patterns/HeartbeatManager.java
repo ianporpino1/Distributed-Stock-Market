@@ -11,7 +11,7 @@ import java.util.Set;
 import java.util.concurrent.*;
 
 public class HeartbeatManager {
-    private final int serverId;
+    
 
     private final Set<Integer> nodeAddresses;
     public final Set<Integer> failedServers = ConcurrentHashMap.newKeySet();
@@ -25,9 +25,8 @@ public class HeartbeatManager {
     private final List<FailureListener> listeners = new ArrayList<>();
     
 
-    public HeartbeatManager(int serverId, Set<Integer> nodeAddresses,
+    public HeartbeatManager(Set<Integer> nodeAddresses,
                             CommunicationStrategy strategy) {
-        this.serverId = serverId;
         this.nodeAddresses = nodeAddresses;
         this.strategy = strategy;
 

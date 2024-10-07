@@ -1,9 +1,6 @@
 package com.server;
 
-import com.message.HeartbeatMessage;
-import com.message.Message;
-import com.message.RequestVoteMessage;
-import com.message.VoteResponseMessage;
+import com.message.*;
 import com.model.Order;
 import com.model.OrderType;
 
@@ -31,8 +28,8 @@ public class Server implements MessageHandler, OrderHandler, FailureListener, Le
     private final HeartbeatManager heartbeatManager;
 
     private final ServerState serverState;
-    
-    
+
+
     private static final int PORT = 9001;
 
     public Server(MatchingEngine matchingEngine, int serverId,
@@ -43,11 +40,11 @@ public class Server implements MessageHandler, OrderHandler, FailureListener, Le
         this.nodeAddresses = nodeAddresses;
         this.strategy = strategy;
         this.serverState = new ServerState();
-        
-        this.heartbeatManager = new HeartbeatManager(serverId, nodeAddresses, strategy);
-        
+
+        this.heartbeatManager = new HeartbeatManager(nodeAddresses, strategy);
+
         this.electionManager = new ElectionManager(serverId, nodeAddresses, strategy, serverState);
-        
+
 
         this.heartbeatManager.addFailureListener(this);
         this.electionManager.addLeaderElectedListener(this);
@@ -61,16 +58,17 @@ public class Server implements MessageHandler, OrderHandler, FailureListener, Le
                 throw new RuntimeException(e);
             }
         }).start();
-        
+
         electionManager.startElectionTimeout();
     }
 
     @Override
     public void onNodeFailure(int failedId) {
-        if(serverState.getLeaderId() == failedId){
+        if (serverState.getLeaderId() == failedId) {
             electionManager.startElection();
         }
     }
+
     @Override
     public void onLeaderElected() {
         HeartbeatMessage heartbeat = new HeartbeatMessage(serverState.getCurrentGeneration(), serverId, serverId);
@@ -99,46 +97,23 @@ public class Server implements MessageHandler, OrderHandler, FailureListener, Le
             heartbeatManager.failedServers.remove(serverId);
         }
     }
-    
+
     @Override
-    public void handleOrder(String orderMessage, InetSocketAddress sender) {
-        System.out.println("Ordem recebida: " + orderMessage);
-        String[] parts = orderMessage.split(":", 2);
-        if (parts.length == 2 && parts[0].equals("ORDER")) {
-            Order order = parseOrder(parts[1]);
-            if (order != null) {
-                matchingEngine.processOrder(order);
-                
-//                //RESPOSTA AO GATEWAY
-//                String response = "Order processed: " + order;
-//                strategy.sendMessage(new Response(MessageType.RESPONSE, response), sender);
-            }
-        } else {
-            System.out.println("Formato de ordem inválido: " + orderMessage);
-        }
-    }
+    public OrderResponse handleOrder(OrderRequest orderRequest, InetSocketAddress sender) {
 
-    private Order parseOrder(String orderDetails) {
-        try {
-            StringTokenizer tokenizer = new StringTokenizer(orderDetails.trim(), ";");
+        System.out.println("Ordem recebida: " + orderRequest.toString());
+        
+        Order order = new Order(orderRequest.getSymbol(),
+                OrderType.valueOf(orderRequest.getOperation()),
+                orderRequest.getQuantity(),
+                orderRequest.getPrice());
 
-            if (tokenizer.countTokens() != 4) {
-                System.out.println("Formato de ordem inválido: " + orderDetails);
-                return null;
-            }
+        matchingEngine.processOrder(order);
 
-            String type = tokenizer.nextToken().trim();
-            String symbol = tokenizer.nextToken().trim();
-            int quantity = Integer.parseInt(tokenizer.nextToken().trim());
-            double price = Double.parseDouble(tokenizer.nextToken().trim());
-
-            return new Order(symbol, OrderType.valueOf(type), quantity, price);
-        } catch (Exception e) {
-            System.out.println("Erro ao processar ordem: " + orderDetails);
-            return null;
-        }
+        return new OrderResponse("SUCCESS");//retornar status do order(pendente, completa)
     }
     
+
     public static void main(String[] args) {
         if (args.length < 2) {
             System.out.println("Uso: java Main <protocol> <serverId> [<nodeId> ...]");
@@ -168,7 +143,7 @@ public class Server implements MessageHandler, OrderHandler, FailureListener, Le
         }
 
         CommunicationStrategy strategy = null;
-        
+
 
         switch (protocol) {
             case "udp" -> strategy = new UdpCommunicationStrategy(serverAddresses);
@@ -178,13 +153,13 @@ public class Server implements MessageHandler, OrderHandler, FailureListener, Le
         }
 
         MatchingEngine matchingEngine = new MatchingEngine(new OrderBookService());
-        
+
         Server server = new Server(matchingEngine, serverId, nodeAddresses, strategy);
 
         System.out.println("Servidor iniciado com protocolo: " + protocol.toUpperCase());
         System.out.println("ServerId: " + serverId);
         System.out.println("NodeAddresses: " + nodeAddresses);
-        
+
         server.start();
     }
 }

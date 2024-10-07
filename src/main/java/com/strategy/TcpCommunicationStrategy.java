@@ -28,19 +28,6 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
         this.connections = new ConcurrentHashMap<>();
     }
 
-    @Override
-    public void startListening(int port, MessageHandler messageHandler, OrderHandler orderHandler) throws IOException {
-        this.messageHandler = messageHandler;
-        this.orderHandler = orderHandler;
-        serverSocket = new ServerSocket(port);
-        executorService.submit(this::acceptConnections);
-    }
-
-    @Override
-    public OrderResponse forwardOrder(OrderRequest orderRequest, InetSocketAddress clientAddress, int serverId) {
-        return null;
-    }
-
     private void acceptConnections() {
         while (!Thread.currentThread().isInterrupted()) {
             try {
@@ -52,6 +39,39 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
         }
     }
 
+    @Override
+    public void startListening(int port, MessageHandler messageHandler, OrderHandler orderHandler) throws IOException {
+        this.messageHandler = messageHandler;
+        this.orderHandler = orderHandler;
+        serverSocket = new ServerSocket(port);
+        executorService.submit(this::acceptConnections);
+    }
+
+    @Override
+    public OrderResponse forwardOrder(OrderRequest orderRequest, InetSocketAddress clientAddress, int serverId) {
+        try {
+            ClientConnection connection = getOrCreateConnection(serverId);
+
+            // Enviar a OrderRequest para o servidor
+            connection.getOut().writeObject(orderRequest);
+            connection.getOut().flush();
+
+            // Aguardar e receber a resposta do servidor
+            Object response = connection.getIn().readObject();
+
+            if (response instanceof OrderResponse) {
+                return (OrderResponse) response;
+            } else {
+                System.err.println("Resposta inesperada do servidor: " + response);
+                return new OrderResponse("ERROR: Resposta inesperada do servidor");
+            }
+        } catch (IOException | ClassNotFoundException e) {
+            System.err.println("Erro ao encaminhar pedido para o servidor " + serverId + ": " + e.getMessage());
+            return null;
+        }
+    }
+    
+
     public void handleClientConnection(Socket clientSocket) {
         try {
             ClientConnection connection = new ClientConnection(clientSocket);
@@ -62,6 +82,9 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
 
                 if(message instanceof OrderRequest orderRequest) {
                     orderHandler.handleOrder(orderRequest,(InetSocketAddress) clientSocket.getRemoteSocketAddress());
+                    OrderResponse response = orderHandler.handleOrder(orderRequest, (InetSocketAddress) clientSocket.getRemoteSocketAddress());
+                    connection.getOut().writeObject(response);
+                    connection.getOut().flush();
                 }
                 else{
                     messageHandler.handleMessage(message, (InetSocketAddress) clientSocket.getRemoteSocketAddress());
@@ -72,15 +95,16 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
         }
 
         //ELSE
-        try (BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream(), "UTF-8"))) {
+        try (   PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
+                BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream(), "UTF-8"))) {
 
             String inputLine = in.readLine();
 
             OrderRequest orderRequest = new OrderRequest(inputLine);
             System.out.println(orderRequest);
-            orderHandler.handleOrder(orderRequest, (InetSocketAddress) clientSocket.getRemoteSocketAddress());
+            OrderResponse response = orderHandler.handleOrder(orderRequest, (InetSocketAddress) clientSocket.getRemoteSocketAddress());
 
-
+            out.println(response);
         } catch (IOException e) {
             System.err.println("Error handling client connection: " + e.getMessage());
         } finally {
@@ -90,11 +114,6 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
                 System.err.println("Error closing socket: " + e.getMessage());
             }
         }
-    }
-
-    private String processMessage(String message) {
-        // Aqui você pode adicionar a lógica para processar a mensagem recebida
-        return "Processed: " + message; // Exemplo simples
     }
 
     @Override

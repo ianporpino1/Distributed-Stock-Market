@@ -21,8 +21,8 @@ import java.util.stream.Collectors;
 public class ApiGateway implements FailureListener, MessageHandler, OrderHandler {
     private static final int GATEWAY_PORT = 8080;
 
-    private CommunicationStrategy strategy;
-    private Set<Integer> nodeAddresses;
+    private final CommunicationStrategy strategy;
+    private final Set<Integer> nodeAddresses;
     private final Map<Integer, Boolean> activeNodes;
     private final HeartbeatManager heartbeatManager;
 
@@ -59,10 +59,9 @@ public class ApiGateway implements FailureListener, MessageHandler, OrderHandler
 
     @Override
     public void handleMessage(Message message, InetSocketAddress sender) {
-        if(message instanceof HeartbeatMessage heartbeatMessage) {
+        if (message instanceof HeartbeatMessage heartbeatMessage) {
             handleHeartbeat(heartbeatMessage);
-        }
-        else {
+        } else {
             System.out.println("Mensagem desconhecida recebida.");
         }
     }
@@ -75,21 +74,24 @@ public class ApiGateway implements FailureListener, MessageHandler, OrderHandler
         }
 
         int serverId = getNextActiveServerId();
+        System.out.println("SERVIDOR ID: " + serverId);
 
         strategy.sendMessage(orderRequest, serverId);
-        
+
         return new OrderResponse("OK");
     }
 
     private int getNextActiveServerId() {
-        int originalIndex = roundRobinIndex;
-        do {
-            int currentId = roundRobinIndex;
-            roundRobinIndex = (roundRobinIndex + 1) % nodeAddresses.size();
-            if (activeNodes.getOrDefault(currentId, false)) {
+        int totalServers = nodeAddresses.size();
+        int startIndex = roundRobinIndex;
+
+        for (int i = 0; i < totalServers; i++) {
+            int currentId = (startIndex + i) % totalServers;
+            if (activeNodes.getOrDefault(currentId, true)) {
+                roundRobinIndex = (currentId + 1) % totalServers;
                 return currentId;
             }
-        } while (roundRobinIndex != originalIndex);
+        }
 
         throw new RuntimeException("Nenhum servidor ativo encontrado.");
     }
@@ -99,34 +101,36 @@ public class ApiGateway implements FailureListener, MessageHandler, OrderHandler
     }
 
     private void handleHeartbeat(HeartbeatMessage message) {
+        System.out.println("Recebeu heartbeat de " + message.getSenderId());
         heartbeatManager.lastHeartbeatReceivedTimes.put(message.getSenderId(), System.currentTimeMillis());
 
     }
+
     public static void main(String[] args) {
         if (args.length < 1) {
             System.out.println("Uso: java Main <protocol> [<nodeId> ...]");
             return;
         }
         String protocol = args[0].toLowerCase();
-        int serverId = Integer.parseInt(args[1]);
+
 
         Set<Integer> nodeAddresses = new HashSet<>();
 
         for (int i = 1; i < args.length; i++) {
             int nodeId = Integer.parseInt(args[i]);
-            if (nodeId != serverId) {
-                nodeAddresses.add(nodeId);
-            }
+
+            nodeAddresses.add(nodeId);
+
         }
-        
+
         Map<Integer, InetSocketAddress> serverAddresses = new HashMap<>();
 
         for (int i = 1; i < args.length; i++) {
             int nodeId = Integer.parseInt(args[i]);
-            if (nodeId != serverId) {
-                int port = nodeId + 9001;
-                serverAddresses.put(nodeId, new InetSocketAddress("localhost", port));
-            }
+           
+            int port = nodeId + 9001;
+            serverAddresses.put(nodeId, new InetSocketAddress("localhost", port));
+
         }
 
         CommunicationStrategy strategy = null;
@@ -138,7 +142,7 @@ public class ApiGateway implements FailureListener, MessageHandler, OrderHandler
             default -> System.out.println("Protocolo não suportado.");
         }
 
-        ApiGateway gateway = new ApiGateway(strategy,nodeAddresses);
+        ApiGateway gateway = new ApiGateway(strategy, nodeAddresses);
 
         System.out.println("Gateway iniciado com protocolo: " + protocol.toUpperCase());
         System.out.println("NodeAddresses: " + nodeAddresses);

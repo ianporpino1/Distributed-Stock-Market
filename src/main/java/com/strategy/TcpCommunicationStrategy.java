@@ -52,19 +52,49 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
         }
     }
 
-    private void handleClientConnection(Socket clientSocket) {
+    public void handleClientConnection(Socket clientSocket) {
         try {
             ClientConnection connection = new ClientConnection(clientSocket);
             connections.putIfAbsent(((InetSocketAddress) clientSocket.getRemoteSocketAddress()).getPort(), connection);
 
             while (!Thread.currentThread().isInterrupted()) {
                 Message message = (Message) connection.getIn().readObject();
-                
-                messageHandler.handleMessage(message, (InetSocketAddress) clientSocket.getRemoteSocketAddress());
+
+                if(message instanceof OrderRequest orderRequest) {
+                    orderHandler.handleOrder(orderRequest,(InetSocketAddress) clientSocket.getRemoteSocketAddress());
+                }
+                else{
+                    messageHandler.handleMessage(message, (InetSocketAddress) clientSocket.getRemoteSocketAddress());
+                }
             }
         } catch (IOException | ClassNotFoundException e) {
-            System.err.println("Erro ao lidar com conexão do cliente: " + e.getMessage());
+            System.err.println("NAO EH MENSAGEM: " + e.getMessage());
         }
+
+        //ELSE
+        try (BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream(), "UTF-8"))) {
+
+            String inputLine = in.readLine();
+
+            OrderRequest orderRequest = new OrderRequest(inputLine);
+            System.out.println(orderRequest);
+            orderHandler.handleOrder(orderRequest, (InetSocketAddress) clientSocket.getRemoteSocketAddress());
+
+
+        } catch (IOException e) {
+            System.err.println("Error handling client connection: " + e.getMessage());
+        } finally {
+            try {
+                clientSocket.close();
+            } catch (IOException e) {
+                System.err.println("Error closing socket: " + e.getMessage());
+            }
+        }
+    }
+
+    private String processMessage(String message) {
+        // Aqui você pode adicionar a lógica para processar a mensagem recebida
+        return "Processed: " + message; // Exemplo simples
     }
 
     @Override
@@ -91,7 +121,13 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
     private ClientConnection getOrCreateConnection(int targetId) throws IOException {
         return connections.computeIfAbsent(targetId, id -> {
             try {
-                InetSocketAddress address = serverAddresses.get(id);
+                InetSocketAddress address;
+                if(targetId == 8080){
+                    address = new InetSocketAddress("localhost", 8080);
+                }
+                else{
+                    address = serverAddresses.get(id);
+                }
                 Socket socket = new Socket(address.getHostName(), address.getPort());
                 System.out.println("Conexão estabelecida com o servidor " + id + " em " + address.getPort());
                 return new ClientConnection(socket);

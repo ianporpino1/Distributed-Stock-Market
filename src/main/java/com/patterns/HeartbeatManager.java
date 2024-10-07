@@ -32,6 +32,15 @@ public class HeartbeatManager {
 
         startHeartbeatChecker();
     }
+    
+    public void startHeartbeatsToGateway(HeartbeatMessage heartbeat){
+        heartbeatTask = heartbeatScheduler.scheduleAtFixedRate(()->sendHeartbeatsToGateway(heartbeat),
+                0, heartbeatInterval, TimeUnit.MILLISECONDS);
+    }
+
+    private void sendHeartbeatsToGateway(HeartbeatMessage heartbeat) {
+        strategy.sendMessage(heartbeat,8080);
+    }
 
     public void startSendingHeartbeats(HeartbeatMessage heartbeat) {
         heartbeatTask = heartbeatScheduler.scheduleAtFixedRate(() -> sendHeartbeats(heartbeat),

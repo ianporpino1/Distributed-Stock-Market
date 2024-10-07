@@ -60,6 +60,11 @@ public class Server implements MessageHandler, OrderHandler, FailureListener, Le
         }).start();
 
         electionManager.startElectionTimeout();
+
+        heartbeatManager.startHeartbeatsToGateway(new HeartbeatMessage(
+                serverState.getCurrentGeneration(),
+                serverId,
+                8080));
     }
 
     @Override
@@ -71,7 +76,7 @@ public class Server implements MessageHandler, OrderHandler, FailureListener, Le
 
     @Override
     public void onLeaderElected() {
-        HeartbeatMessage heartbeat = new HeartbeatMessage(serverState.getCurrentGeneration(), serverId, serverId);
+        HeartbeatMessage heartbeat = new HeartbeatMessage(serverState.getCurrentGeneration(), serverId, serverState.getLeaderId());
         heartbeatManager.startSendingHeartbeats(heartbeat);
     }
 

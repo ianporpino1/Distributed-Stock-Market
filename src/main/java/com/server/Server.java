@@ -108,14 +108,20 @@ public class Server implements MessageHandler, OrderHandler, FailureListener, Le
 
         System.out.println("Ordem recebida: " + orderRequest.toString());
         
-        Order order = new Order(orderRequest.getSymbol(),
-                OrderType.valueOf(orderRequest.getOperation()),
-                orderRequest.getQuantity(),
-                orderRequest.getPrice());
+        if(serverState.getServerRole() == ServerRole.FOLLOWER) {
+            return strategy.forwardOrder(orderRequest,sender, serverState.getLeaderId());
+        }
+        else{
+            Order order = new Order(orderRequest.getSymbol(),
+                    OrderType.valueOf(orderRequest.getOperation()),
+                    orderRequest.getQuantity(),
+                    orderRequest.getPrice());
 
-        matchingEngine.processOrder(order);
+            matchingEngine.processOrder(order);
 
-        return new OrderResponse("SUCCESS");//retornar status do order(pendente, completa)
+            return new OrderResponse("SUCCESS");//retornar status do order(pendente, completa)
+        }
+        
     }
     
 

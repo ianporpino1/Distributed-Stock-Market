@@ -52,12 +52,10 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
         try {
             ClientConnection connection = getOrCreateConnection(serverId);
 
-            // Enviar a OrderRequest para o servidor
             connection.getOut().writeObject(orderRequest);
             connection.getOut().flush();
             connection.getOut().reset();
 
-            // Aguardar e receber a resposta do servidor
             Object response = connection.getIn().readObject();
 
             if (response instanceof OrderResponse) {
@@ -68,7 +66,7 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
             }
         } catch (IOException | ClassNotFoundException e) {
             System.err.println("Erro ao encaminhar pedido para o servidor " + serverId + ": " + e.getMessage());
-            return null;
+            return new OrderResponse("FAILED");
         }
     }
     
@@ -92,8 +90,8 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
                     messageHandler.handleMessage(message, (InetSocketAddress) clientSocket.getRemoteSocketAddress());
                 }
             }
-        } catch (IOException | ClassNotFoundException e) {
-            System.err.println("NAO EH MENSAGEM: " + e.getMessage());
+        } catch (IOException | ClassNotFoundException ignored) {
+            
         }
 
         //ELSE
@@ -106,7 +104,7 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
             System.out.println(orderRequest);
             OrderResponse response = orderHandler.handleOrder(orderRequest, (InetSocketAddress) clientSocket.getRemoteSocketAddress());
 
-            out.println(response);
+            out.println(response.getResponseMessage());
         } catch (IOException e) {
             System.err.println("Error handling client connection: " + e.getMessage());
         } finally {

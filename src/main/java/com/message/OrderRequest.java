@@ -5,6 +5,8 @@ import java.io.Serializable;
 import java.util.Arrays;
 
 public class OrderRequest implements Serializable, Message {
+    private static final long serialVersionUID = 1L;
+    
     int senderId;
     private String operation;
     private String symbol;

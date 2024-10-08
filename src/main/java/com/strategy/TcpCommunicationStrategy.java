@@ -55,6 +55,7 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
             // Enviar a OrderRequest para o servidor
             connection.getOut().writeObject(orderRequest);
             connection.getOut().flush();
+            connection.getOut().reset();
 
             // Aguardar e receber a resposta do servidor
             Object response = connection.getIn().readObject();
@@ -85,6 +86,7 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
                     OrderResponse response = orderHandler.handleOrder(orderRequest, (InetSocketAddress) clientSocket.getRemoteSocketAddress());
                     connection.getOut().writeObject(response);
                     connection.getOut().flush();
+                    connection.getOut().reset();
                 }
                 else{
                     messageHandler.handleMessage(message, (InetSocketAddress) clientSocket.getRemoteSocketAddress());

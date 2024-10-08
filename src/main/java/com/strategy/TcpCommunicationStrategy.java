@@ -80,7 +80,6 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
                 Message message = (Message) connection.getIn().readObject();
 
                 if(message instanceof OrderRequest orderRequest) {
-                    orderHandler.handleOrder(orderRequest,(InetSocketAddress) clientSocket.getRemoteSocketAddress());
                     OrderResponse response = orderHandler.handleOrder(orderRequest, (InetSocketAddress) clientSocket.getRemoteSocketAddress());
                     connection.getOut().writeObject(response);
                     connection.getOut().flush();

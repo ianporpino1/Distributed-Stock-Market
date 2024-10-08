@@ -134,8 +134,10 @@ public class ApiGateway implements FailureListener, MessageHandler, OrderHandler
 
         CommunicationStrategy strategy = null;
 
+        var gatewayAddress = new InetSocketAddress("localhost", 8080);
+
         switch (protocol) {
-            case "udp" -> strategy = new UdpCommunicationStrategy(serverAddresses);
+            case "udp" -> strategy = new UdpCommunicationStrategy(serverAddresses,gatewayAddress);
             case "tcp" -> strategy = new TcpCommunicationStrategy(serverAddresses);
             case "http" -> strategy = new HttpCommunicationStrategy(serverAddresses);
             default -> System.out.println("Protocolo não suportado.");

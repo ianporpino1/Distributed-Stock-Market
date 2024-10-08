@@ -19,13 +19,15 @@ import java.util.concurrent.Executors;
 
 public class UdpCommunicationStrategy implements CommunicationStrategy {
     private final Map<Integer, InetSocketAddress> serverAddresses;
-    //private final InetSocketAddress gatewayAddress;
+    private final InetSocketAddress gatewayAddress;
     private final ExecutorService executorService;
     private MessageHandler messageHandler;
+    private OrderHandler orderHandler;
     private DatagramSocket socket;
 
-    public UdpCommunicationStrategy(Map<Integer, InetSocketAddress> serverAddresses) {
+    public UdpCommunicationStrategy(Map<Integer, InetSocketAddress> serverAddresses, InetSocketAddress gatewayAddress) {
         this.serverAddresses = serverAddresses;
+        this.gatewayAddress = gatewayAddress;
         this.executorService = Executors.newCachedThreadPool();
         
     }
@@ -33,6 +35,7 @@ public class UdpCommunicationStrategy implements CommunicationStrategy {
     @Override
     public void startListening(int port, MessageHandler messageHandler, OrderHandler orderHandler) throws IOException {
         this.messageHandler = messageHandler;
+        this.orderHandler = orderHandler;
         socket = new DatagramSocket(port);
         System.out.println("UDP socket listening on port " + port);
         executorService.submit(this::receiveMessages);
@@ -40,8 +43,44 @@ public class UdpCommunicationStrategy implements CommunicationStrategy {
 
     @Override
     public OrderResponse forwardOrder(OrderRequest orderRequest, InetSocketAddress clientAddress, int serverId) {
-        return null;
+        DatagramSocket socket = null;
+        try {
+            socket = new DatagramSocket();
+
+            ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
+            ObjectOutputStream outStream = new ObjectOutputStream(byteStream);
+            outStream.writeObject(orderRequest);
+            outStream.flush();
+            byte[] sendData = byteStream.toByteArray();
+
+            DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, serverAddresses.get(serverId));
+            socket.send(sendPacket);
+
+            byte[] receiveData = new byte[1024];
+            DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
+            socket.receive(receivePacket);
+
+            ByteArrayInputStream byteInputStream = new ByteArrayInputStream(receivePacket.getData());
+            ObjectInputStream inStream = new ObjectInputStream(byteInputStream);
+            Object response = inStream.readObject();
+
+            if (response instanceof OrderResponse) {
+                return (OrderResponse) response;
+            } else {
+                System.err.println("Resposta inesperada do servidor: " + response);
+                return new OrderResponse("ERROR: Resposta inesperada do servidor");
+            }
+
+        } catch (IOException | ClassNotFoundException e) {
+            System.err.println("Erro ao encaminhar pedido para o servidor " + serverId + ": " + e.getMessage());
+            return new OrderResponse("FAILED");
+        } finally {
+            if (socket != null && !socket.isClosed()) {
+                socket.close();
+            }
+        }
     }
+
 
     private void receiveMessages() {
         while (!Thread.currentThread().isInterrupted()) {
@@ -66,11 +105,50 @@ public class UdpCommunicationStrategy implements CommunicationStrategy {
             
 
             System.out.println("Recebida mensagem de " + senderAddress + ": " + message.getClass().getName());
-
-            messageHandler.handleMessage(message, senderAddress);
-
+            if(message instanceof OrderRequest orderRequest) {
+                OrderResponse response = orderHandler.handleOrder(orderRequest, senderAddress);
+                sendResponse(response,senderAddress);
+            } else{
+                messageHandler.handleMessage(message, senderAddress);
+            }
         } catch (IOException | ClassNotFoundException e) {
-            System.err.println("Erro ao processar pacote UDP: " + e.getMessage());
+            System.out.println("Pacote não é um objeto serializado, tentando ler como String...");
+            handleString(packet);
+        }
+        
+    }
+    
+    private void handleString(DatagramPacket packet) {
+        try {
+            String receivedString = new String(packet.getData(), 0, packet.getLength(), "UTF-8");
+            InetSocketAddress senderAddress = new InetSocketAddress(packet.getAddress(), packet.getPort());
+
+            System.out.println("Recebida string de " + senderAddress + ": " + receivedString);
+            
+            OrderRequest orderRequest = new OrderRequest(receivedString);
+            OrderResponse response = orderHandler.handleOrder(orderRequest, senderAddress);
+            
+            sendResponse(response, senderAddress);
+        } catch (Exception e) {
+            System.err.println("Erro ao processar pacote como String: " + e.getMessage());
+        }
+    }
+
+    private void sendResponse(OrderResponse response, InetSocketAddress clientAddress) {
+        try (ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
+             ObjectOutputStream out = new ObjectOutputStream(byteStream)) {
+            
+            out.writeObject(response);
+            out.flush();
+            byte[] responseData = byteStream.toByteArray();
+            
+            DatagramPacket responsePacket = new DatagramPacket(responseData, responseData.length, clientAddress);
+            socket.send(responsePacket);
+
+            System.out.println("Resposta enviada para " + clientAddress);
+
+        } catch (IOException e) {
+            System.err.println("Erro ao enviar resposta UDP: " + e.getMessage());
         }
     }
 
@@ -78,7 +156,13 @@ public class UdpCommunicationStrategy implements CommunicationStrategy {
     public void sendMessage(Message message, int nodeId) {
         executorService.submit(() -> {
             try {
-                InetSocketAddress address = serverAddresses.get(nodeId);
+                InetSocketAddress address;
+                if(nodeId == gatewayAddress.getPort()) {
+                    address = gatewayAddress;
+                }
+                else{
+                    address = serverAddresses.get(nodeId);
+                }
                 if (address == null) {
                     System.err.println("Endereço para o servidor " + nodeId + " não encontrado.");
                     return;

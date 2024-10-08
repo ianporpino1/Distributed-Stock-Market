@@ -139,7 +139,7 @@ public class ApiGateway implements FailureListener, MessageHandler, OrderHandler
         switch (protocol) {
             case "udp" -> strategy = new UdpCommunicationStrategy(serverAddresses,gatewayAddress);
             case "tcp" -> strategy = new TcpCommunicationStrategy(serverAddresses);
-            case "http" -> strategy = new HttpCommunicationStrategy(serverAddresses);
+            case "http" -> strategy = new HttpCommunicationStrategy(serverAddresses, gatewayAddress);
             default -> System.out.println("Protocolo não suportado.");
         }
 

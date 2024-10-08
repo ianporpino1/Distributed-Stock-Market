@@ -245,8 +245,7 @@ public class HttpCommunicationStrategy implements CommunicationStrategy {
             Object object = objectInputStream.readObject();
             return clazz.cast(object);
         }catch (EOFException e){
-            System.err.println("SSSSSSSSSSSS");
+            return null;
         }
-        return null;
     }
 }

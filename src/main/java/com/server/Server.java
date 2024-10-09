@@ -7,6 +7,7 @@ import com.model.OrderType;
 import com.patterns.ElectionManager;
 import com.patterns.HeartbeatManager;
 import com.patterns.ServerRole;
+import com.repository.OrderRepository;
 import com.service.MatchingEngine;
 import com.service.OrderBookService;
 import com.strategy.CommunicationStrategy;
@@ -165,9 +166,15 @@ public class Server implements MessageHandler, OrderHandler, FailureListener, Le
             default -> System.out.println("Protocolo não suportado.");
         }
 
-        MatchingEngine matchingEngine = new MatchingEngine(new OrderBookService());
+        MatchingEngine matchingEngine = new MatchingEngine(new OrderBookService(new OrderRepository()));
 
         Server server = new Server(matchingEngine, serverId, nodeAddresses, strategy);
+        
+        try {
+            Class.forName("org.postgresql.Driver");
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+        }
 
         System.out.println("Servidor iniciado com protocolo: " + protocol.toUpperCase());
         System.out.println("ServerId: " + serverId);

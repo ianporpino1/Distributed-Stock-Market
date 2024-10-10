@@ -52,12 +52,16 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
         try {
             ClientConnection connection = getOrCreateConnection(serverId);
 
-            connection.getOut().writeObject(orderRequest);
-            connection.getOut().flush();
-            connection.getOut().reset();
+            Object response;
+                    
+            synchronized (connection.getOut()) {
+                connection.getOut().writeObject(orderRequest);
+                connection.getOut().flush();
+                connection.getOut().reset();
 
-            Object response = connection.getIn().readObject();
-
+                response = connection.getIn().readObject();
+            }
+            
             if (response instanceof OrderResponse) {
                 return (OrderResponse) response;
             } else {
@@ -81,20 +85,24 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
 
                 if(message instanceof OrderRequest orderRequest) {
                     OrderResponse response = orderHandler.handleOrder(orderRequest, (InetSocketAddress) clientSocket.getRemoteSocketAddress());
-                    connection.getOut().writeObject(response);
-                    connection.getOut().flush();
-                    connection.getOut().reset();
+                    synchronized (connection.getOut()) {
+                        connection.getOut().writeObject(response);
+                        connection.getOut().flush();
+                        connection.getOut().reset();
+                    }
                 }
                 else{
                     messageHandler.handleMessage(message, (InetSocketAddress) clientSocket.getRemoteSocketAddress());
                 }
             }
         } catch (IOException | ClassNotFoundException ignored) {
-            
+            handleClientRequest(clientSocket);
+            connections.remove(((InetSocketAddress) clientSocket.getRemoteSocketAddress()).getPort());
         }
+    }
 
-        //ELSE
-        try (   PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
+    private void handleClientRequest(Socket clientSocket) {
+        try (   BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(clientSocket.getOutputStream()));
                 BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream(), "UTF-8"))) {
 
             String inputLine = in.readLine();
@@ -103,7 +111,8 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
             System.out.println(orderRequest);
             OrderResponse response = orderHandler.handleOrder(orderRequest, (InetSocketAddress) clientSocket.getRemoteSocketAddress());
 
-            out.println(response.getResponseMessage());
+            writer.write(response.getResponseMessage());
+            writer.flush();
         } catch (IOException e) {
             System.err.println("Error handling client connection: " + e.getMessage());
         } finally {

@@ -103,8 +103,6 @@ public class UdpCommunicationStrategy implements CommunicationStrategy {
             Message message = (Message) in.readObject();
             InetSocketAddress senderAddress = new InetSocketAddress(packet.getAddress(), packet.getPort());
             
-
-            System.out.println("Recebida mensagem de " + senderAddress + ": " + message.getClass().getName());
             if(message instanceof OrderRequest orderRequest) {
                 OrderResponse response = orderHandler.handleOrder(orderRequest, senderAddress);
                 sendResponse(response,senderAddress);
@@ -122,8 +120,6 @@ public class UdpCommunicationStrategy implements CommunicationStrategy {
         try {
             String receivedString = new String(packet.getData(), 0, packet.getLength(), "UTF-8");
             InetSocketAddress senderAddress = new InetSocketAddress(packet.getAddress(), packet.getPort());
-
-            System.out.println("Recebida string de " + senderAddress + ": " + receivedString);
             
             OrderRequest orderRequest = new OrderRequest(receivedString);
             OrderResponse response = orderHandler.handleOrder(orderRequest, senderAddress);
@@ -142,11 +138,10 @@ public class UdpCommunicationStrategy implements CommunicationStrategy {
             out.flush();
             byte[] responseData = byteStream.toByteArray();
             
+            System.out.println(response.getResponseMessage());
+            
             DatagramPacket responsePacket = new DatagramPacket(responseData, responseData.length, clientAddress);
             socket.send(responsePacket);
-
-            System.out.println("Resposta enviada para " + clientAddress);
-
         } catch (IOException e) {
             System.err.println("Erro ao enviar resposta UDP: " + e.getMessage());
         }

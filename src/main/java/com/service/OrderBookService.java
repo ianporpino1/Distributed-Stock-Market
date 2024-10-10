@@ -28,7 +28,6 @@ public class OrderBookService {
     void addOrder(Order order) {
         OrderBook orderBook = getOrderBook(order.getSymbol());
         orderBook.addOrder(order);
-        System.out.println("ORDERS: " + orderBook.getBuyOrders());
 
         List<OrderExecution> executedOrders = orderBook.matchOrders();
 

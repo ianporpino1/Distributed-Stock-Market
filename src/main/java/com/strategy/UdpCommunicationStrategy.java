@@ -110,7 +110,6 @@ public class UdpCommunicationStrategy implements CommunicationStrategy {
                 messageHandler.handleMessage(message, senderAddress);
             }
         } catch (IOException | ClassNotFoundException e) {
-            System.out.println("Pacote não é um objeto serializado, tentando ler como String...");
             handleString(packet);
         }
         
@@ -123,6 +122,8 @@ public class UdpCommunicationStrategy implements CommunicationStrategy {
             
             OrderRequest orderRequest = new OrderRequest(receivedString);
             OrderResponse response = orderHandler.handleOrder(orderRequest, senderAddress);
+            
+            System.out.println(response.getResponseMessage());
             
             sendResponse(response, senderAddress);
         } catch (Exception e) {
@@ -137,8 +138,6 @@ public class UdpCommunicationStrategy implements CommunicationStrategy {
             out.writeObject(response);
             out.flush();
             byte[] responseData = byteStream.toByteArray();
-            
-            System.out.println(response.getResponseMessage());
             
             DatagramPacket responsePacket = new DatagramPacket(responseData, responseData.length, clientAddress);
             socket.send(responsePacket);

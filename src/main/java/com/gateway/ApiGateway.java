@@ -75,6 +75,8 @@ public class ApiGateway implements FailureListener, MessageHandler, OrderHandler
 
         int serverId = getNextActiveServerId();
         
+        System.out.println(orderRequest);
+        
         return strategy.forwardOrder(orderRequest, sender, serverId);
     }
 

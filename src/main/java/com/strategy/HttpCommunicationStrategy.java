@@ -180,7 +180,6 @@ public class HttpCommunicationStrategy implements CommunicationStrategy {
             responseBuilder.append(line).append("\r\n");
         }
 
-        // Lê o corpo da resposta
         Map<String, String> headers = parseHeaders(responseBuilder.toString());
         int contentLength = Integer.parseInt(headers.getOrDefault("Content-Length", "0"));
         char[] contentBuffer = new char[contentLength];
@@ -206,7 +205,7 @@ public class HttpCommunicationStrategy implements CommunicationStrategy {
     }
 
     public static String createHttpResponse(OrderResponse response) throws IOException {
-        String body="";
+        String body;
         String statusLine;
 
         if ("SUCCESS".equals(response.getResponseMessage())) {

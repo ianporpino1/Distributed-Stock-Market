@@ -108,8 +108,9 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
             String inputLine = in.readLine();
 
             OrderRequest orderRequest = new OrderRequest(inputLine);
-            System.out.println(orderRequest);
             OrderResponse response = orderHandler.handleOrder(orderRequest, (InetSocketAddress) clientSocket.getRemoteSocketAddress());
+            
+            System.out.println(response.getResponseMessage());
 
             writer.write(response.getResponseMessage());
             writer.flush();

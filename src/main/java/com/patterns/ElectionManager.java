@@ -78,7 +78,7 @@ public class ElectionManager {
                 voteGranted = true;
             }
         }
-        VoteResponseMessage response = new VoteResponseMessage(state.getCurrentGeneration(), voteGranted, serverId);
+        VoteResponseMessage response = new VoteResponseMessage(serverId, state.getCurrentGeneration(), voteGranted);
         strategy.sendMessage(response, message.getSenderId());
     }
 

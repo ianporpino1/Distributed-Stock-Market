@@ -1,31 +1,29 @@
 package com.server;
 
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import java.io.*;
 import java.net.Socket;
 
 public class ClientConnection {
     private final Socket socket;
-    private final ObjectOutputStream out;
-    private final ObjectInputStream in;
+    private final BufferedWriter out;
+    private final BufferedReader in;
 
 
     public ClientConnection(Socket socket) throws IOException {
         this.socket = socket;
-        this.out = new ObjectOutputStream(socket.getOutputStream());
-        this.in = new ObjectInputStream(socket.getInputStream());
+        this.out = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
+        this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
     }
 
     public Socket getSocket() {
         return socket;
     }
 
-    public ObjectOutputStream getOut() {
+    public BufferedWriter getOut() {
         return out;
     }
 
-    public ObjectInputStream getIn() {
+    public BufferedReader getIn() {
         return in;
     }
 }

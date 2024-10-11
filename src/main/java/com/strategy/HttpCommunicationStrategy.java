@@ -8,7 +8,6 @@ import com.server.OrderHandler;
 
 import java.io.*;
 import java.net.*;
-import java.util.Base64;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -44,14 +43,13 @@ public class HttpCommunicationStrategy implements CommunicationStrategy {
              BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(out));
              BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
 
-            String encodedContent = serializeToBase64(orderRequest);
-
-            sendPostRequest(writer, address, "/forward/order", encodedContent);
+            String content = orderRequest.toString();
+            sendPostRequest(writer, address, "/forward/order", content);
 
             String responseContent = readResponse(reader);
             System.out.println(responseContent);
-            
-            if(responseContent.equals("SUCCESS")) {
+
+            if (responseContent.equals("SUCCESS")) {
                 return new OrderResponse(responseContent);
             }
 
@@ -83,11 +81,10 @@ public class HttpCommunicationStrategy implements CommunicationStrategy {
 
             String headers = readRequest(reader);
             String content = getContent(headers, reader);
-            
+
             OrderResponse response = processHttpRequest(headers, content, address);
-            
+
             if (response != null) {
-                
                 String httpResponse = createHttpResponse(response);
                 writer.write(httpResponse);
                 writer.flush();
@@ -95,8 +92,6 @@ public class HttpCommunicationStrategy implements CommunicationStrategy {
         } catch (IOException e) {
             System.err.println("Error handling client connection: " + e.getMessage());
             e.printStackTrace();
-        } catch (ClassNotFoundException e) {
-            throw new RuntimeException(e);
         } finally {
             try {
                 clientSocket.close();
@@ -106,14 +101,14 @@ public class HttpCommunicationStrategy implements CommunicationStrategy {
         }
     }
 
-    private OrderResponse processHttpRequest(String httpRequest, String content, InetSocketAddress address) throws IOException, ClassNotFoundException {
+    private OrderResponse processHttpRequest(String httpRequest, String content, InetSocketAddress address) throws IOException {
         if (httpRequest.startsWith("POST /message")) {
-            Message message = deserializeFromBase64(content, Message.class);
+            Message message = Message.fromString(content);  // Usar fromString() para desserializar
             messageHandler.handleMessage(message, address);
         } else if (httpRequest.startsWith("POST /order")) {
-            return orderHandler.handleOrder(new OrderRequest(content), address);
+            return orderHandler.handleOrder(OrderRequest.fromString(content), address);  // Usar fromString()
         } else if (httpRequest.startsWith("POST /forward/order")) {
-            OrderRequest order = deserializeFromBase64(content, OrderRequest.class);
+            OrderRequest order = OrderRequest.fromString(content);  // Usar fromString()
             return orderHandler.handleOrder(order, address);
         }
         return null;
@@ -132,8 +127,8 @@ public class HttpCommunicationStrategy implements CommunicationStrategy {
             try (Socket socket = new Socket(address.getAddress(), address.getPort());
                  BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()))) {
 
-                String encodedMessage = serializeToBase64(message);
-                sendPostRequest(writer, address, "/message", encodedMessage);
+                String content = message.toString();  // Serializar para string
+                sendPostRequest(writer, address, "/message", content);
 
             } catch (IOException e) {
                 System.err.println("Erro ao enviar mensagem HTTP: " + e.getMessage());
@@ -183,11 +178,7 @@ public class HttpCommunicationStrategy implements CommunicationStrategy {
         Map<String, String> headers = parseHeaders(responseBuilder.toString());
         int contentLength = Integer.parseInt(headers.getOrDefault("Content-Length", "0"));
         char[] contentBuffer = new char[contentLength];
-        int bytesRead = reader.read(contentBuffer, 0, contentLength);
-
-        if (bytesRead == -1) {
-            System.err.println("Erro: Nenhuma resposta do servidor ou resposta vazia.");
-        }
+        reader.read(contentBuffer, 0, contentLength);
 
         return new String(contentBuffer);
     }
@@ -209,42 +200,17 @@ public class HttpCommunicationStrategy implements CommunicationStrategy {
         String statusLine;
 
         if ("SUCCESS".equals(response.getResponseMessage())) {
-//            body = serializeToBase64(response);
             body = "SUCCESS";
             statusLine = "HTTP/1.1 200 OK";
         } else {
             body = "FAIL";
             statusLine = "HTTP/1.1 400 FAILED";
         }
-        
 
         return statusLine + "\r\n" +
                 "Content-Type: text/plain\r\n" +
                 "Content-Length: " + body.length() + "\r\n" +
                 "\r\n" +
                 body;
-    }
-
-    public static String serializeToBase64(Object object) throws IOException {
-        try (ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-             ObjectOutputStream objectOutputStream = new ObjectOutputStream(byteArrayOutputStream)) {
-
-            objectOutputStream.writeObject(object);
-            objectOutputStream.flush();
-            byte[] serializedData = byteArrayOutputStream.toByteArray();
-            return Base64.getEncoder().encodeToString(serializedData);
-        }
-    }
-
-    public static <T> T deserializeFromBase64(String base64String, Class<T> clazz) throws IOException, ClassNotFoundException {
-        byte[] serializedData = Base64.getDecoder().decode(base64String);
-        try (ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(serializedData);
-             ObjectInputStream objectInputStream = new ObjectInputStream(byteArrayInputStream)) {
-
-            Object object = objectInputStream.readObject();
-            return clazz.cast(object);
-        }catch (EOFException e){
-            return null;
-        }
     }
 }

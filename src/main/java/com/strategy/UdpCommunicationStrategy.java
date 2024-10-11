@@ -1,6 +1,5 @@
 package com.strategy;
 
-
 import com.message.Message;
 import com.message.OrderRequest;
 import com.message.OrderResponse;
@@ -29,7 +28,6 @@ public class UdpCommunicationStrategy implements CommunicationStrategy {
         this.serverAddresses = serverAddresses;
         this.gatewayAddress = gatewayAddress;
         this.executorService = Executors.newCachedThreadPool();
-        
     }
 
     @Override
@@ -43,15 +41,11 @@ public class UdpCommunicationStrategy implements CommunicationStrategy {
 
     @Override
     public OrderResponse forwardOrder(OrderRequest orderRequest, InetSocketAddress clientAddress, int serverId) {
-        DatagramSocket socket = null;
         try {
-            socket = new DatagramSocket();
+            DatagramSocket socket = new DatagramSocket();
 
-            ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
-            ObjectOutputStream outStream = new ObjectOutputStream(byteStream);
-            outStream.writeObject(orderRequest);
-            outStream.flush();
-            byte[] sendData = byteStream.toByteArray();
+            String requestStr = orderRequest.toString();
+            byte[] sendData = requestStr.getBytes(StandardCharsets.UTF_8);
 
             DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, serverAddresses.get(serverId));
             socket.send(sendPacket);
@@ -60,27 +54,14 @@ public class UdpCommunicationStrategy implements CommunicationStrategy {
             DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
             socket.receive(receivePacket);
 
-            ByteArrayInputStream byteInputStream = new ByteArrayInputStream(receivePacket.getData());
-            ObjectInputStream inStream = new ObjectInputStream(byteInputStream);
-            Object response = inStream.readObject();
+            String responseStr = new String(receivePacket.getData(), 0, receivePacket.getLength(), StandardCharsets.UTF_8);
+            return OrderResponse.fromString(responseStr); 
 
-            if (response instanceof OrderResponse) {
-                return (OrderResponse) response;
-            } else {
-                System.err.println("Resposta inesperada do servidor: " + response);
-                return new OrderResponse("ERROR: Resposta inesperada do servidor");
-            }
-
-        } catch (IOException | ClassNotFoundException e) {
+        } catch (IOException e) {
             System.err.println("Erro ao encaminhar pedido para o servidor " + serverId + ": " + e.getMessage());
             return new OrderResponse("FAILED");
-        } finally {
-            if (socket != null && !socket.isClosed()) {
-                socket.close();
-            }
         }
     }
-
 
     private void receiveMessages() {
         while (!Thread.currentThread().isInterrupted()) {
@@ -97,48 +78,29 @@ public class UdpCommunicationStrategy implements CommunicationStrategy {
     }
 
     private void handlePacket(DatagramPacket packet) {
-        try (ByteArrayInputStream byteStream = new ByteArrayInputStream(packet.getData());
-             ObjectInputStream in = new ObjectInputStream(byteStream)) {
-
-            Message message = (Message) in.readObject();
+        try {
+            String receivedString = new String(packet.getData(), 0, packet.getLength(), StandardCharsets.UTF_8);
             InetSocketAddress senderAddress = new InetSocketAddress(packet.getAddress(), packet.getPort());
-            
-            if(message instanceof OrderRequest orderRequest) {
+
+            Message message = Message.fromString(receivedString);
+
+            if (message instanceof OrderRequest orderRequest) {
                 OrderResponse response = orderHandler.handleOrder(orderRequest, senderAddress);
-                sendResponse(response,senderAddress);
-            } else{
+                sendResponse(response, senderAddress);
+            } else {
                 messageHandler.handleMessage(message, senderAddress);
             }
-        } catch (IOException | ClassNotFoundException e) {
-            handleString(packet);
-        }
-        
-    }
-    
-    private void handleString(DatagramPacket packet) {
-        try {
-            String receivedString = new String(packet.getData(), 0, packet.getLength(), "UTF-8");
-            InetSocketAddress senderAddress = new InetSocketAddress(packet.getAddress(), packet.getPort());
-            
-            OrderRequest orderRequest = new OrderRequest(receivedString);
-            OrderResponse response = orderHandler.handleOrder(orderRequest, senderAddress);
-            
-            System.out.println(response.getResponseMessage());
-            
-            sendResponse(response, senderAddress);
         } catch (Exception e) {
-            System.err.println("Erro ao processar pacote como String: " + e.getMessage());
+            System.err.println("Erro ao processar pacote: " + e.getMessage());
         }
     }
 
     private void sendResponse(OrderResponse response, InetSocketAddress clientAddress) {
-        try (ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
-             ObjectOutputStream out = new ObjectOutputStream(byteStream)) {
-            
-            out.writeObject(response);
-            out.flush();
-            byte[] responseData = byteStream.toByteArray();
-            
+        try {
+            // Enviar resposta como string
+            String responseStr = response.toString();
+            byte[] responseData = responseStr.getBytes(StandardCharsets.UTF_8);
+
             DatagramPacket responsePacket = new DatagramPacket(responseData, responseData.length, clientAddress);
             socket.send(responsePacket);
         } catch (IOException e) {
@@ -151,10 +113,9 @@ public class UdpCommunicationStrategy implements CommunicationStrategy {
         executorService.submit(() -> {
             try {
                 InetSocketAddress address;
-                if(nodeId == gatewayAddress.getPort()) {
+                if (nodeId == gatewayAddress.getPort()) {
                     address = gatewayAddress;
-                }
-                else{
+                } else {
                     address = serverAddresses.get(nodeId);
                 }
                 if (address == null) {
@@ -162,7 +123,8 @@ public class UdpCommunicationStrategy implements CommunicationStrategy {
                     return;
                 }
 
-                byte[] data = serializeMessage(message);
+                String messageStr = message.toString();
+                byte[] data = messageStr.getBytes(StandardCharsets.UTF_8);
                 DatagramPacket packet = new DatagramPacket(data, data.length, address.getAddress(), address.getPort());
 
                 socket.send(packet);
@@ -171,15 +133,4 @@ public class UdpCommunicationStrategy implements CommunicationStrategy {
             }
         });
     }
-
-    private byte[] serializeMessage(Message message) throws IOException {
-        try (ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
-             ObjectOutputStream out = new ObjectOutputStream(byteStream)) {
-
-            out.writeObject(message);
-            out.flush();
-            return byteStream.toByteArray();
-        }
-    }
-    
 }

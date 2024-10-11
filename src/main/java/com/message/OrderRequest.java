@@ -1,50 +1,17 @@
 package com.message;
 
-
-import java.io.Serializable;
-import java.util.Arrays;
-
-public class OrderRequest implements Serializable, Message {
-    private static final long serialVersionUID = 1L;
+public class OrderRequest implements Message {
     
-    int senderId;
     private String operation;
     private String symbol;
     private int quantity;
     private double price;
 
-    public OrderRequest(int senderId, String operation, String symbol, int quantity, double price) {
-        this.senderId = senderId;
+    public OrderRequest(String operation, String symbol, int quantity, double price) {
         this.operation = operation;
         this.symbol = symbol;
         this.quantity = quantity;
         this.price = price;
-    }
-
-    public OrderRequest(String orderMessage) {
-        this.parse(orderMessage);
-    }
-
-    private void parse(String orderMessage) {
-        String[] parts = orderMessage.split(":", 2);
-        if (parts.length != 2) {
-            System.out.println("Formato de ordem inválido: " + orderMessage);
-        }
-
-        String[] orderDetails = parts[1].split(";");
-        if (orderDetails.length != 4) {
-            System.out.println("Formato de ordem inválido: " + Arrays.toString(orderDetails));
-        }
-
-        operation = orderDetails[0].trim();
-        symbol = orderDetails[1].trim();
-
-        try {
-            quantity = Integer.parseInt(orderDetails[2].trim());
-            price = Double.parseDouble(orderDetails[3].trim());
-        } catch (NumberFormatException e) {
-            System.out.println("Erro ao analisar quantidade ou preço: " + e.getMessage());
-        }
     }
 
     public String getOperation() {
@@ -65,9 +32,30 @@ public class OrderRequest implements Serializable, Message {
 
     @Override
     public String toString() {
-        return "ORDER:" + operation + ";" + symbol + ";" + quantity + ";" + price;
+        return String.format("1|ORDER_REQUEST|%s;%s;%d;%.2f", operation, symbol, quantity, price);
     }
-    
+
+    public static OrderRequest fromString(String message) {
+        String[] parts = message.split("\\|");
+
+        if (parts.length != 3) {
+            throw new IllegalArgumentException("Invalid message format.");
+        }
+
+        String[] dataParts = parts[2].split(";");
+
+        if (dataParts.length != 4) {
+            throw new IllegalArgumentException("Invalid order format.");
+        }
+
+        String operation = dataParts[0];
+        String symbol = dataParts[1];
+        int quantity = Integer.parseInt(dataParts[2]);
+        double price = Double.parseDouble(dataParts[3]);
+
+        return new OrderRequest(operation, symbol, quantity, price);
+    }
+
     @Override
     public int getSenderId() {
         return 0;

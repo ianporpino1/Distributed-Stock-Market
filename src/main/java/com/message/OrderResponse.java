@@ -1,9 +1,8 @@
 package com.message;
 
-import java.io.Serializable;
 
-public class OrderResponse implements Message, Serializable {
-    private static final long serialVersionUID = 1L;
+public class OrderResponse implements Message{
+    
     
     private final String responseMessage;
     private int senderId;
@@ -14,6 +13,22 @@ public class OrderResponse implements Message, Serializable {
     public String getResponseMessage() {
         return responseMessage;
     }
+    
+    public String toString() {
+        return String.format("1|ORDER_RESPONSE|%s", responseMessage);
+    }
+
+    public static OrderResponse fromString(String message) {
+        String[] parts = message.split("\\|");
+
+        if (parts.length != 3) {
+            throw new IllegalArgumentException("Invalid message format.");
+        }
+        String responseMessage = parts[2];
+        
+        return new OrderResponse(responseMessage);
+    }
+    
 
     @Override
     public int getSenderId() {

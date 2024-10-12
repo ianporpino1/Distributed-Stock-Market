@@ -112,7 +112,6 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
     private void closeConnection(Socket socket, int port) throws IOException {
         socket.close();
         connections.remove(port);
-        connections.remove(port);
     }
 
     @Override

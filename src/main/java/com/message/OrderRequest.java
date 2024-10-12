@@ -51,7 +51,7 @@ public class OrderRequest implements Message {
         String operation = dataParts[0];
         String symbol = dataParts[1];
         int quantity = Integer.parseInt(dataParts[2]);
-        double price = Double.parseDouble(dataParts[3]);
+        double price = Double.parseDouble(dataParts[3].replace(",", "."));
 
         return new OrderRequest(operation, symbol, quantity, price);
     }

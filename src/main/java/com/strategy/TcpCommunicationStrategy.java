@@ -3,9 +3,11 @@ package com.strategy;
 import com.message.Message;
 import com.message.OrderRequest;
 import com.message.OrderResponse;
+import com.message.VoteResponseMessage;
 import com.server.ClientConnection;
 import com.server.MessageHandler;
 import com.server.OrderHandler;
+import com.sun.source.tree.NewArrayTree;
 
 import java.io.*;
 import java.net.*;
@@ -52,77 +54,65 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
         try {
             ClientConnection connection = getOrCreateConnection(serverId);
 
-            Object response;
-                    
-            synchronized (connection.getOut()) {
-                connection.getOut().writeObject(orderRequest);
-                connection.getOut().flush();
-                connection.getOut().reset();
+            String response;
 
-                response = connection.getIn().readObject();
+            synchronized (connection.getOut()) {
+                connection.getOut().write(orderRequest.toString());
+                connection.getOut().newLine();
+                connection.getOut().flush();
+
+                response = connection.getIn().readLine();
             }
-            
-            if (response instanceof OrderResponse) {
-                return (OrderResponse) response;
-            } else {
-                System.err.println("Resposta inesperada do servidor: " + response);
-                return new OrderResponse("ERROR: Resposta inesperada do servidor");
-            }
-        } catch (IOException | ClassNotFoundException e) {
+            System.out.println(response);
+
+            return OrderResponse.fromString(response);
+
+        } catch (IOException e) {
             System.err.println("Erro ao encaminhar pedido para o servidor " + serverId + ": " + e.getMessage());
             return new OrderResponse("FAILED");
         }
     }
-    
 
     public void handleClientConnection(Socket clientSocket) {
         try {
             ClientConnection connection = new ClientConnection(clientSocket);
-            connections.putIfAbsent(((InetSocketAddress) clientSocket.getRemoteSocketAddress()).getPort(), connection);
+
+            int remotePort = ((InetSocketAddress) clientSocket.getRemoteSocketAddress()).getPort();
+            connections.putIfAbsent(remotePort, connection);
 
             while (!Thread.currentThread().isInterrupted()) {
-                Message message = (Message) connection.getIn().readObject();
+                String messageStr = connection.getIn().readLine();
+                Message message = Message.fromString(messageStr);
 
-                if(message instanceof OrderRequest orderRequest) {
+                if (message instanceof OrderRequest orderRequest) {
                     OrderResponse response = orderHandler.handleOrder(orderRequest, (InetSocketAddress) clientSocket.getRemoteSocketAddress());
+
                     synchronized (connection.getOut()) {
-                        connection.getOut().writeObject(response);
+                        connection.getOut().write(response.toString());
+                        connection.getOut().newLine();
                         connection.getOut().flush();
-                        connection.getOut().reset();
                     }
-                }
-                else{
+                    if (isClientConnection(clientSocket)) {
+                        closeConnection(clientSocket, remotePort);
+                        break;
+                    }
+                } else {
                     messageHandler.handleMessage(message, (InetSocketAddress) clientSocket.getRemoteSocketAddress());
                 }
             }
-        } catch (IOException | ClassNotFoundException ignored) {
-            handleClientRequest(clientSocket);
-            connections.remove(((InetSocketAddress) clientSocket.getRemoteSocketAddress()).getPort());
+        } catch (IOException e) {
+            System.err.println("Erro ao lidar com conexão do cliente: " + e.getMessage());
         }
     }
 
-    private void handleClientRequest(Socket clientSocket) {
-        try (   BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(clientSocket.getOutputStream()));
-                BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream(), "UTF-8"))) {
+    private boolean isClientConnection(Socket socket) {
+        return socket.getLocalPort() == 8080;
+    }
 
-            String inputLine = in.readLine();
-
-            OrderRequest orderRequest = new OrderRequest(inputLine);
-            OrderResponse response = orderHandler.handleOrder(orderRequest, (InetSocketAddress) clientSocket.getRemoteSocketAddress());
-            
-            System.out.println(response.getResponseMessage());
-
-            writer.write(response.getResponseMessage());
-            writer.flush();
-        } catch (IOException e) {
-            System.err.println("Error handling client connection: " + e.getMessage());
-        } finally {
-            try {
-                clientSocket.close();
-            } catch (IOException e) {
-                System.err.println("Error closing socket: " + e.getMessage());
-            }
-        }
+    private void closeConnection(Socket socket, int port) throws IOException {
+        socket.close();
+        connections.remove(port);
+        connections.remove(port);
     }
 
     @Override
@@ -132,9 +122,9 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
                 ClientConnection connection = getOrCreateConnection(nodeId);
 
                 if (connection.getSocket() != null && !connection.getSocket().isClosed()) {
-                    connection.getOut().writeObject(message);
+                    connection.getOut().write(message.toString());
+                    connection.getOut().newLine();
                     connection.getOut().flush();
-                    connection.getOut().reset();
                 } else {
                     System.err.println("Socket para o servidor " + nodeId + " está fechado ou nulo.");
                     connections.remove(nodeId);

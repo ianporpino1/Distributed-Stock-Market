@@ -41,8 +41,9 @@ public class UdpCommunicationStrategy implements CommunicationStrategy {
 
     @Override
     public OrderResponse forwardOrder(OrderRequest orderRequest, InetSocketAddress clientAddress, int serverId) {
+        DatagramSocket socket = null;
         try {
-            DatagramSocket socket = new DatagramSocket();
+            socket = new DatagramSocket();
 
             String requestStr = orderRequest.toString();
             byte[] sendData = requestStr.getBytes(StandardCharsets.UTF_8);
@@ -54,12 +55,16 @@ public class UdpCommunicationStrategy implements CommunicationStrategy {
             DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
             socket.receive(receivePacket);
 
-            String responseStr = new String(receivePacket.getData(), 0, receivePacket.getLength(), StandardCharsets.UTF_8);
-            return OrderResponse.fromString(responseStr); 
+            String responseStr = new String(receivePacket.getData(), 0, receivePacket.getLength());
+            return OrderResponse.fromString(responseStr);
 
         } catch (IOException e) {
             System.err.println("Erro ao encaminhar pedido para o servidor " + serverId + ": " + e.getMessage());
             return new OrderResponse("FAILED");
+        } finally {
+            if (socket != null && !socket.isClosed()) {
+                socket.close();
+            }
         }
     }
 
@@ -79,7 +84,7 @@ public class UdpCommunicationStrategy implements CommunicationStrategy {
 
     private void handlePacket(DatagramPacket packet) {
         try {
-            String receivedString = new String(packet.getData(), 0, packet.getLength(), StandardCharsets.UTF_8);
+            String receivedString = new String(packet.getData(), 0, packet.getLength());
             InetSocketAddress senderAddress = new InetSocketAddress(packet.getAddress(), packet.getPort());
 
             Message message = Message.fromString(receivedString);
@@ -97,9 +102,9 @@ public class UdpCommunicationStrategy implements CommunicationStrategy {
 
     private void sendResponse(OrderResponse response, InetSocketAddress clientAddress) {
         try {
-            // Enviar resposta como string
+            System.out.println(response.getResponseMessage());
             String responseStr = response.toString();
-            byte[] responseData = responseStr.getBytes(StandardCharsets.UTF_8);
+            byte[] responseData = responseStr.getBytes();
 
             DatagramPacket responsePacket = new DatagramPacket(responseData, responseData.length, clientAddress);
             socket.send(responsePacket);
@@ -124,7 +129,7 @@ public class UdpCommunicationStrategy implements CommunicationStrategy {
                 }
 
                 String messageStr = message.toString();
-                byte[] data = messageStr.getBytes(StandardCharsets.UTF_8);
+                byte[] data = messageStr.getBytes();
                 DatagramPacket packet = new DatagramPacket(data, data.length, address.getAddress(), address.getPort());
 
                 socket.send(packet);

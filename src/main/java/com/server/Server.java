@@ -7,6 +7,7 @@ import com.model.OrderType;
 import com.patterns.ElectionManager;
 import com.patterns.HeartbeatManager;
 import com.patterns.ServerRole;
+import com.repository.ConnectionManager;
 import com.repository.OrderRepository;
 import com.service.MatchingEngine;
 import com.service.OrderBookService;
@@ -18,6 +19,7 @@ import com.strategy.UdpCommunicationStrategy;
 import java.awt.image.ImageConsumer;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.sql.SQLException;
 import java.util.*;
 
 public class Server implements MessageHandler, OrderHandler, FailureListener, LeaderElectedListener {
@@ -126,7 +128,7 @@ public class Server implements MessageHandler, OrderHandler, FailureListener, Le
     }
     
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws SQLException {
         if (args.length < 2) {
             System.out.println("Uso: java Main <protocol> <serverId> [<nodeId> ...]");
             return;
@@ -166,7 +168,7 @@ public class Server implements MessageHandler, OrderHandler, FailureListener, Le
             default -> System.out.println("Protocolo não suportado.");
         }
 
-        MatchingEngine matchingEngine = new MatchingEngine(new OrderBookService(new OrderRepository()));
+        MatchingEngine matchingEngine = new MatchingEngine(new OrderBookService(new OrderRepository(new ConnectionManager())));
 
         Server server = new Server(matchingEngine, serverId, nodeAddresses, strategy);
         

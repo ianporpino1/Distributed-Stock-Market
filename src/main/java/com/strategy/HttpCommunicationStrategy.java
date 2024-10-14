@@ -52,8 +52,7 @@ public class HttpCommunicationStrategy implements CommunicationStrategy {
            return orderResponse;
         } catch (IOException e) {
             System.err.println("Erro ao enviar mensagem HTTP para o servidor " + serverId + ": " + e.getMessage());
-            e.printStackTrace();
-            return OrderResponse.fromString("FAILED");
+            return new OrderResponse("FAILED");
         }
     }
 

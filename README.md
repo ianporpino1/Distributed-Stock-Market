@@ -2,6 +2,13 @@
 
 Este projeto consiste na implementação de um **Matching Engine** utilizando os protocolos **UDP**, **TCP** e **HTTP**. O projeto faz uso de padrões distribuídos para garantir a eficiência e robustez na comunicação entre nós.
 
+# Protocolo
+VERSION|OPERATION|DADOS
+
+ex: 1|ORDER_REQUEST|BUY;AAPL;10;150
+    +1|VOTE_REQUEST|generation=1;candidateId=1;leaderId=-1
+
+
 ## Padrões Distribuídos Implementados
 
 Os seguintes padrões distribuídos foram aplicados:

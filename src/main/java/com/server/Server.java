@@ -95,6 +95,7 @@ public class Server implements MessageHandler, OrderHandler, FailureListener, Le
     public void handleHeartbeat(HeartbeatMessage message) {
         if (message.getGeneration() >= serverState.getCurrentGeneration()) {
             if (serverState.getServerRole() != ServerRole.FOLLOWER) {
+                heartbeatManager.stopSendingHeartbeats();
                 serverState.setServerRole(ServerRole.FOLLOWER);
                 System.out.println("Node " + serverId + " reconhece o líder " + message.getLeaderId() + " no termo " + serverState.getCurrentGeneration());
             }

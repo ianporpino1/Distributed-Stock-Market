@@ -16,11 +16,12 @@ public class HeartbeatManager {
     private final Set<Integer> nodeAddresses;
     public final Set<Integer> failedServers = ConcurrentHashMap.newKeySet();
     private CommunicationStrategy strategy;
-    private ScheduledExecutorService heartbeatScheduler = Executors.newScheduledThreadPool(2); //provavelmente tera de ser 2 threads
+    private ScheduledExecutorService heartbeatScheduler = Executors.newScheduledThreadPool(3); //provavelmente tera de ser 2 threads
     public Map<Integer, Long> lastHeartbeatReceivedTimes = new ConcurrentHashMap<>();// uma para enviar heartbeats para o gateway e outra p receber
     public int heartbeatInterval = 2000;                                              // heartbeats do lider
     
     private ScheduledFuture<?> heartbeatTask;
+    private ScheduledFuture<?> heartbeatGateway;
 
     private final List<FailureListener> listeners = new ArrayList<>();
     
@@ -34,7 +35,7 @@ public class HeartbeatManager {
     }
     
     public void startHeartbeatsToGateway(HeartbeatMessage heartbeat){
-        heartbeatTask = heartbeatScheduler.scheduleAtFixedRate(()->sendHeartbeatsToGateway(heartbeat),
+        heartbeatGateway = heartbeatScheduler.scheduleAtFixedRate(()->sendHeartbeatsToGateway(heartbeat),
                 0, heartbeatInterval, TimeUnit.MILLISECONDS);
     }
 

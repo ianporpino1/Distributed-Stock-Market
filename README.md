@@ -8,7 +8,6 @@ Os seguintes padrões distribuídos foram aplicados:
 
 - **Heartbeat**: Verificação periódica para assegurar que os nós estão ativos.
 - **Leader and Followers**: Um nó líder coordena as ações dos nós seguidores.
-- **Majority Quorum**: Decisões são tomadas com base no consenso da maioria dos nós.
 - **Generation Clock**: Controle de eleição para evitar split-brain.
 - **Single-Socket Channel**: Comunicação eficiente entre os nós através de um único canal de conexão.
 

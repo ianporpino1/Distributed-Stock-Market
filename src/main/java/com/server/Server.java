@@ -120,11 +120,8 @@ public class Server implements MessageHandler, OrderHandler, FailureListener, Le
                     orderRequest.getQuantity(),
                     orderRequest.getPrice());
 
-            matchingEngine.processOrder(order);
-
-            return new OrderResponse("SUCCESS");//retornar status do order(pendente, completa)
+            return matchingEngine.processOrder(order);//retornar status do order(pendente, completa)
         }
-        
     }
     
 

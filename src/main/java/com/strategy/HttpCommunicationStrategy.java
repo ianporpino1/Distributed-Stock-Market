@@ -46,18 +46,15 @@ public class HttpCommunicationStrategy implements CommunicationStrategy {
             String content = orderRequest.toString();
             sendPostRequest(writer, address, "/forward/order", content);
 
-            String responseContent = readResponse(reader);
-            System.out.println(responseContent);
+            OrderResponse orderResponse = readResponse(reader);
+            System.out.println(orderResponse);
 
-            if (responseContent.equals("SUCCESS")) {
-                return new OrderResponse(responseContent);
-            }
-
+           return orderResponse;
         } catch (IOException e) {
             System.err.println("Erro ao enviar mensagem HTTP para o servidor " + serverId + ": " + e.getMessage());
             e.printStackTrace();
+            return OrderResponse.fromString("FAILED");
         }
-        return null;
     }
 
     private void acceptConnections() {
@@ -103,12 +100,12 @@ public class HttpCommunicationStrategy implements CommunicationStrategy {
 
     private OrderResponse processHttpRequest(String httpRequest, String content, InetSocketAddress address) throws IOException {
         if (httpRequest.startsWith("POST /message")) {
-            Message message = Message.fromString(content);  // Usar fromString() para desserializar
+            Message message = Message.fromString(content);
             messageHandler.handleMessage(message, address);
         } else if (httpRequest.startsWith("POST /order")) {
-            return orderHandler.handleOrder(OrderRequest.fromString(content), address);  // Usar fromString()
+            return orderHandler.handleOrder(OrderRequest.fromString(content), address);
         } else if (httpRequest.startsWith("POST /forward/order")) {
-            OrderRequest order = OrderRequest.fromString(content);  // Usar fromString()
+            OrderRequest order = OrderRequest.fromString(content);
             return orderHandler.handleOrder(order, address);
         }
         return null;
@@ -127,7 +124,7 @@ public class HttpCommunicationStrategy implements CommunicationStrategy {
             try (Socket socket = new Socket(address.getAddress(), address.getPort());
                  BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()))) {
 
-                String content = message.toString();  // Serializar para string
+                String content = message.toString();
                 sendPostRequest(writer, address, "/message", content);
 
             } catch (IOException e) {
@@ -167,7 +164,7 @@ public class HttpCommunicationStrategy implements CommunicationStrategy {
         return new String(contentBuffer);
     }
 
-    public static String readResponse(BufferedReader reader) throws IOException {
+    public static OrderResponse readResponse(BufferedReader reader) throws IOException {
         String line;
         StringBuilder responseBuilder = new StringBuilder();
 
@@ -179,8 +176,9 @@ public class HttpCommunicationStrategy implements CommunicationStrategy {
         int contentLength = Integer.parseInt(headers.getOrDefault("Content-Length", "0"));
         char[] contentBuffer = new char[contentLength];
         reader.read(contentBuffer, 0, contentLength);
+        System.out.println(new String(contentBuffer));
 
-        return new String(contentBuffer);
+        return OrderResponse.fromString(new String(contentBuffer));
     }
 
     public static Map<String, String> parseHeaders(String headersString) {
@@ -196,14 +194,11 @@ public class HttpCommunicationStrategy implements CommunicationStrategy {
     }
 
     public static String createHttpResponse(OrderResponse response) throws IOException {
-        String body;
+        String body = response.toString();
         String statusLine;
-
-        if ("SUCCESS".equals(response.getResponseMessage())) {
-            body = "SUCCESS";
+        if (body.contains("COMPLETED") || body.contains("PENDING")) {
             statusLine = "HTTP/1.1 200 OK";
         } else {
-            body = "FAIL";
             statusLine = "HTTP/1.1 400 FAILED";
         }
 

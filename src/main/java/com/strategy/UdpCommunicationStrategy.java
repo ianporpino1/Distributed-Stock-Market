@@ -7,10 +7,7 @@ import com.server.MessageHandler;
 import com.server.OrderHandler;
 
 import java.io.*;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetSocketAddress;
-import java.net.SocketException;
+import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -102,7 +99,7 @@ public class UdpCommunicationStrategy implements CommunicationStrategy {
 
     private void sendResponse(OrderResponse response, InetSocketAddress clientAddress) {
         try {
-            System.out.println(response.getResponseMessage());
+            System.out.println(response);
             String responseStr = response.toString();
             byte[] responseData = responseStr.getBytes();
 

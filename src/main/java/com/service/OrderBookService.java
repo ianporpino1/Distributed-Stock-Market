@@ -1,8 +1,10 @@
 package com.service;
 
+import com.message.OrderResponse;
 import com.model.Order;
 import com.model.OrderBook;
 import com.model.OrderExecution;
+import com.model.OrderStatus;
 import com.repository.OrderRepository;
 
 import java.util.*;
@@ -25,7 +27,7 @@ public class OrderBookService {
         return orderBooks.computeIfAbsent(symbol, k -> new OrderBook());
     }
 
-    void addOrder(Order order) {
+    OrderStatus addOrder(Order order) {
         OrderBook orderBook = getOrderBook(order.getSymbol());
         orderBook.addOrder(order);
 
@@ -37,7 +39,10 @@ public class OrderBookService {
                     orderRepository.save(executedOrder.getOrder(), executedOrder.getExecutedQuantity(), executedOrder.isPartialExecution());
                 }
             });
+            
+            return OrderStatus.COMPLETED; //Nao eh certeza que salvar no banco dara certo
         }
+        return OrderStatus.PENDING;
     }
     
 }

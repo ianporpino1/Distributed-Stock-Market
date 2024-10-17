@@ -53,22 +53,21 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
     public OrderResponse forwardOrder(OrderRequest orderRequest, InetSocketAddress clientAddress, int serverId) {
         try {
             ClientConnection connection = getOrCreateConnection(serverId);
-
+            
             String response;
-
             synchronized (connection.getOut()) {
                 connection.getOut().write(orderRequest.toString());
                 connection.getOut().newLine();
                 connection.getOut().flush();
-
                 response = connection.getIn().readLine();
             }
             System.out.println(response);
-
+            
             return OrderResponse.fromString(response);
 
         } catch (IOException e) {
             System.err.println("Erro ao encaminhar pedido para o servidor " + serverId + ": " + e.getMessage());
+            connections.remove(serverId);
             return new OrderResponse("FAILED");
         }
     }
@@ -136,21 +135,29 @@ public class TcpCommunicationStrategy implements CommunicationStrategy {
     }
 
     private ClientConnection getOrCreateConnection(int targetId) throws IOException {
-        return connections.computeIfAbsent(targetId, id -> {
+        ClientConnection connection = connections.get(targetId);
+        
+        if (connection != null &&
+                !connection.getSocket().isClosed() &&
+                connection.getSocket().isConnected()) {
+            return connection;
+        }
+
+        if (connection != null) {
+            connections.remove(targetId);
             try {
-                InetSocketAddress address;
-                if(targetId == 8080){
-                    address = new InetSocketAddress("localhost", 8080);
-                }
-                else{
-                    address = serverAddresses.get(id);
-                }
-                Socket socket = new Socket(address.getHostName(), address.getPort());
-                System.out.println("Conexão estabelecida com o servidor " + id + " em " + address.getPort());
-                return new ClientConnection(socket);
-            } catch (IOException e) {
-                throw new RuntimeException("Não foi possível conectar ao servidor " + id, e);
+                connection.getSocket().close();
+            } catch (IOException ignored) {
             }
-        });
+        }
+
+        InetSocketAddress address = targetId == 8080
+                ? new InetSocketAddress("localhost", 8080)
+                : serverAddresses.get(targetId);
+
+        Socket socket = new Socket(address.getHostName(), address.getPort());
+        ClientConnection newConnection = new ClientConnection(socket);
+        connections.put(targetId, newConnection);
+        return newConnection;
     }
 }

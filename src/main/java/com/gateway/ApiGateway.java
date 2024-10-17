@@ -102,7 +102,7 @@ public class ApiGateway implements FailureListener, MessageHandler, OrderHandler
     private void handleHeartbeat(HeartbeatMessage message) {
         System.out.println("Recebeu heartbeat de " + message.getSenderId());
         heartbeatManager.lastHeartbeatReceivedTimes.put(message.getSenderId(), System.currentTimeMillis());
-        if(activeNodes.get(message.getSenderId()).booleanValue() ==false) {
+        if(!activeNodes.get(message.getSenderId())) {
             System.out.println("Sevidor " + message.getSenderId()+ " voltou");
             activeNodes.replace(message.getSenderId(), true);
         }

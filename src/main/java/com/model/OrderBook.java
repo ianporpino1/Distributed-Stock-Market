@@ -30,18 +30,24 @@ public class OrderBook {
         } else if (order.getType() == OrderType.SELL) {
             sellOrders.add(order);
         }
-        matchOrders();
     }
 
-    private void matchOrders() {
+    public synchronized List<OrderExecution> matchOrders() {
+        List<OrderExecution> executedOrders = new ArrayList<>();
+        
         while (!buyOrders.isEmpty() && !sellOrders.isEmpty()) {
             Order buyOrder = buyOrders.peek();
             Order sellOrder = sellOrders.peek();
 
             if (buyOrder.getPrice() >= sellOrder.getPrice()) {
                 int quantity = Math.min(buyOrder.getQuantity(), sellOrder.getQuantity());
+                
                 buyOrder.setQuantity(buyOrder.getQuantity() - quantity);
                 sellOrder.setQuantity(sellOrder.getQuantity() - quantity);
+
+                executedOrders.add(new OrderExecution(buyOrder, quantity, sellOrder.getPrice()));
+                executedOrders.add(new OrderExecution(sellOrder, quantity, buyOrder.getPrice()));
+
 
                 if (buyOrder.getQuantity() == 0) buyOrders.poll();
                 if (sellOrder.getQuantity() == 0) sellOrders.poll();
@@ -49,6 +55,7 @@ public class OrderBook {
                 break;
             }
         }
+        return executedOrders;
     }
 
     public synchronized List<Order> getBuyOrders() {

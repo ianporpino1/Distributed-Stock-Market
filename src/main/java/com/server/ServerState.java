@@ -49,6 +49,13 @@ public class ServerState {
         this.serverRole = role;
         isLeader.set(role == ServerRole.LEADER);
     }
+    public synchronized boolean voteFor(int nodeId, int generation) {
+        if (!votedForAtGeneration.containsKey(nodeId) || votedForAtGeneration.get(nodeId) != generation) {
+            votedForAtGeneration.put(nodeId, generation);
+            return true; // Voto concedido
+        }
+        return false; // Já havia votado nesta geração
+    }
 
 
     public Map<Integer, Integer> getVotedForAtGeneration() {
